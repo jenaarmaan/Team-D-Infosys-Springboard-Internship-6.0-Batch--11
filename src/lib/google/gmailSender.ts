@@ -8,7 +8,7 @@ export async function sendEmail(to: string, subject: string, body: string) {
   console.log("[GMAIL] Sending email via proxy");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.post<any>("/api/v1/gmail/send", { to, subject, body }, { googleToken: token });
+  const result = await apiClient.post<any>("/api/v1/gmail?action=send", { to, subject, body }, { googleToken: token });
 
   if (!result.success) {
     throw new Error(result.error?.message || "Failed to send email");
@@ -24,7 +24,7 @@ export async function replyToEmail(threadId: string, to: string, subject: string
   console.log("[GMAIL] Replying to email via proxy");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.post<any>("/api/v1/gmail/reply", { threadId, to, subject, body }, { googleToken: token });
+  const result = await apiClient.post<any>("/api/v1/gmail?action=reply", { threadId, to, subject, body }, { googleToken: token });
 
   if (!result.success) {
     throw new Error(result.error?.message || "Failed to reply to email");

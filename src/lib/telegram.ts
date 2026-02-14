@@ -14,10 +14,10 @@ export interface TelegramSendResult {
 export class TelegramProxyClient {
     async sendMessage(chatId: string | number, text: string): Promise<TelegramSendResult> {
         try {
-            const result = await apiClient.post<any>('/telegram/send', { chatId, text });
+            const result = await apiClient.post<any>('/api/v1/telegram?action=send', { chatId, text });
             return {
                 success: true,
-                messageId: result.message_id
+                messageId: result.data.message_id
             };
         } catch (error: any) {
             console.error('[TELEGRAM PROXY ERROR]', error);

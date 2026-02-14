@@ -8,7 +8,7 @@ export async function fetchInbox(limit = 50) {
   console.log("[GMAIL] Fetching inbox via proxy (limit: " + limit + ")");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.get<any[]>(`/api/v1/gmail/list?limit=${limit}`, { googleToken: token });
+  const result = await apiClient.get<any[]>(`/api/v1/gmail?action=list&limit=${limit}`, { googleToken: token });
 
   if (!result.success) {
     throw new Error(result.error?.message || "Failed to fetch Gmail inbox");
@@ -25,7 +25,7 @@ export async function fetchInbox(limit = 50) {
  */
 export async function fetchUnreadInbox(limit = 10) {
   const token = await getValidAccessToken();
-  const result = await apiClient.get<any[]>(`/api/v1/gmail/list?unread=true&limit=${limit}`, { googleToken: token });
+  const result = await apiClient.get<any[]>(`/api/v1/gmail?action=list&unread=true&limit=${limit}`, { googleToken: token });
 
   if (!result.success) {
     return [];
@@ -42,7 +42,7 @@ export async function fetchUnreadInbox(limit = 10) {
  */
 export async function readEmail(messageId: string) {
   const token = await getValidAccessToken();
-  const result = await apiClient.get<any>(`/api/v1/gmail/get?id=${messageId}`, { googleToken: token });
+  const result = await apiClient.get<any>(`/api/v1/gmail?action=get&id=${messageId}`, { googleToken: token });
 
   if (!result.success) {
     throw new Error(result.error?.message || "Failed to read email");
@@ -59,6 +59,6 @@ export async function readEmail(messageId: string) {
  */
 export async function markEmailAsRead(messageId: string) {
   const token = await getValidAccessToken();
-  const result = await apiClient.post<any>(`/api/v1/gmail/mark-read`, { messageId }, { googleToken: token });
+  const result = await apiClient.post<any>(`/api/v1/gmail?action=mark-read`, { messageId }, { googleToken: token });
   return result.success;
 }

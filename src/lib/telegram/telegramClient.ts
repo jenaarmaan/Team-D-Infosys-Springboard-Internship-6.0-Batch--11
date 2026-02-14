@@ -124,7 +124,7 @@ export class TelegramClient {
     try {
       console.log(`[TELEGRAM] Sending message via proxy to chat ${chatId}`);
 
-      const result = await apiClient.post<any>("/api/v1/telegram/send", { chatId, text });
+      const result = await apiClient.post<any>("/api/v1/telegram?action=send", { chatId, text });
 
       if (result.success) {
         return {

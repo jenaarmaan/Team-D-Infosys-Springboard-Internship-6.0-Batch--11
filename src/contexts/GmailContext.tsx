@@ -265,7 +265,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
   /* ================= OAUTH FETCH HELPERS ================= */
 
   const getEmailDetails = async (id: string, token: string) => {
-    const result = await apiClient.get<any>(`/api/v1/gmail/get?id=${id}`, { googleToken: token });
+    const result = await apiClient.get<any>(`/api/v1/gmail?action=get&id=${id}`, { googleToken: token });
     if (!result.success) throw new Error(result.error?.message || "Failed to fetch email details");
     return result.data;
   };
@@ -296,7 +296,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
 
       // 2. Fetch via Secure Proxy
       const result = await apiClient.get<any[]>(
-        `/api/v1/gmail/list?limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
+        `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
 
