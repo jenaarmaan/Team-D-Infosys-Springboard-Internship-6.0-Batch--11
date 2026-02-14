@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { auth as firebaseAuth } from './clients/firebase.admin';
+import { getAuth } from './clients/firebase.admin';
 import { logger } from './logger';
 
 export type AuthenticatedRequest = VercelRequest & {
@@ -32,6 +32,7 @@ export const withMiddleware = (
             }
 
             const idToken = authHeader.split('Bearer ')[1];
+            const firebaseAuth = getAuth();
             const decodedToken = await firebaseAuth.verifyIdToken(idToken!);
             const uid = decodedToken.uid;
 

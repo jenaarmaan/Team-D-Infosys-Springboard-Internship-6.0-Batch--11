@@ -21,5 +21,9 @@ export function getFirebaseAdmin() {
     });
 }
 
-export const db = getFirebaseAdmin().firestore();
-export const auth = getFirebaseAdmin().auth();
+export const db = admin.apps.length > 0 ? getFirebaseAdmin().firestore() : null;
+export const auth = admin.apps.length > 0 ? getFirebaseAdmin().auth() : null;
+
+// Lazy getters to avoid top-level crash
+export const getDb = () => getFirebaseAdmin().firestore();
+export const getAuth = () => getFirebaseAdmin().auth();

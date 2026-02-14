@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { db } from "@/lib/firebase/firebase";
+import { auth, db } from "@/lib/firebase/firebase";
 import { collection, query, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { getTelegramClient } from "@/lib/telegram/telegramClient";
 import { TelegramMessage, TelegramChat } from "@/lib/telegram/telegramTypes";
@@ -128,52 +128,57 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         if (!client || !isConnected) return;
 
-        console.log("[TELEGRAM] Initializing Firestore real-time listener...");
+        // 🔒 Only start listener if user is authenticated (prevents permission errors)
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            if (!user) {
+                console.log("[TELEGRAM] Waiting for auth before starting real-time listener...");
+                return;
+            }
 
-        // Listen for new updates in the telegram_updates collection
-        const updatesRef = collection(db, "telegram_updates");
-        const q = query(
-            updatesRef,
-            orderBy("date", "desc"),
-            limit(100)
-        );
+            console.log("[TELEGRAM] Initializing Firestore real-time listener for", user.email);
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                    const updateData = change.doc.data();
-                    const parsedUpdate = {
-                        id: change.doc.id, // Using Firestore Doc ID as unique identifier
-                        chatId: updateData.chatId,
-                        senderId: updateData.senderId,
-                        senderName: updateData.senderName,
-                        text: updateData.text,
-                        date: updateData.date, // Assuming direct JS Date or Firestore Timestamp
-                        chatTitle: updateData.chatTitle || updateData.senderName || "Unknown",
-                        chatType: updateData.chatType || "private"
-                    };
+            // Listen for new updates in the telegram_updates collection
+            const updatesRef = collection(db, "telegram_updates");
+            const q = query(
+                updatesRef,
+                orderBy("date", "desc"),
+                limit(100)
+            );
 
-                    // 1. Update Singleton Cache
-                    client.updateCacheFromFirestore(parsedUpdate);
+            const snapshotUnsub = onSnapshot(q, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                        const updateData = change.doc.data();
+                        const parsedUpdate = {
+                            id: change.doc.id,
+                            chatId: updateData.chatId,
+                            senderId: updateData.senderId,
+                            senderName: updateData.senderName,
+                            text: updateData.text,
+                            date: updateData.date,
+                            chatTitle: updateData.chatTitle || updateData.senderName || "Unknown",
+                            chatType: updateData.chatType || "private"
+                        };
 
-                    // 🎙️ Announce New Messages
-                    if (settings.messageAlerts && parsedUpdate.senderId !== 0 && !processedMessageIds.has(Number(parsedUpdate.id))) {
-                        // processedMessageIds.add(Number(parsedUpdate.id)); // Use actual ID once standardized
+                        client.updateCacheFromFirestore(parsedUpdate);
 
-                        const announcement = `New message from ${parsedUpdate.senderName}: ${parsedUpdate.text.substring(0, 40)}`;
-                        speakText(announcement, { volume: settings.speechVolume / 100, rate: settings.speechRate / 50 });
+                        if (settings.messageAlerts && parsedUpdate.senderId !== 0 && !processedMessageIds.has(Number(parsedUpdate.id))) {
+                            const announcement = `New message from ${parsedUpdate.senderName}: ${parsedUpdate.text.substring(0, 40)}`;
+                            speakText(announcement, { volume: settings.speechVolume / 100, rate: settings.speechRate / 50 });
+                        }
                     }
-                }
+                });
+
+                client.getRecentContext().then(({ chats, messages: polledMessages }) => {
+                    setUnreadChats(chats);
+                    mergeUpdatesToHistory(polledMessages);
+                });
+            }, (err) => {
+                console.error("[TELEGRAM] Firestore listener error:", err);
+                setError("Real-time sync failed. Please refresh.");
             });
 
-            // Sync React State after processing all changes
-            client.getRecentContext().then(({ chats, messages: polledMessages }) => {
-                setUnreadChats(chats);
-                mergeUpdatesToHistory(polledMessages);
-            });
-        }, (err) => {
-            console.error("[TELEGRAM] Firestore listener error:", err);
-            setError("Real-time sync failed. Please refresh.");
+            return () => snapshotUnsub();
         });
 
         return () => unsubscribe();

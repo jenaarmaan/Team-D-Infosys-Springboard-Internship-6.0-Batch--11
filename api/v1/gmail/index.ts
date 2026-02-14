@@ -22,10 +22,11 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
 
     switch (action) {
         case 'list': {
-            const { limit, unread } = req.query;
+            const { limit, unread, query } = req.query;
             const emails = await gmailService.listEmails(googleToken, {
                 limit: limit ? parseInt(limit as string) : 50,
-                unread: unread === 'true'
+                unread: unread === 'true',
+                q: query as string
             });
             return res.status(200).json({ success: true, data: emails, error: null });
         }

@@ -56,11 +56,10 @@ class BiometricService {
 
             const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
 
-            // 🔥 Switch to mediapipe runtime if possible for 10x speed boost
+            // ⚡ Use tfjs runtime for maximum stability in diverse browser environments
             this.detector = await faceLandmarksDetection.createDetector(model, {
-                runtime: 'mediapipe',
-                solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
-                refineLandmarks: false, // Set to false to increase performance
+                runtime: 'tfjs',
+                refineLandmarks: false,
                 maxFaces: 1
             });
 
@@ -76,19 +75,7 @@ class BiometricService {
             this.isLoaded = true;
         } catch (err: any) {
             console.error("[BIOMETRIC] Critical Init Error:", err);
-            // Fallback attempt with tfjs runtime
-            try {
-                console.log("[BIOMETRIC] Retrying with tfjs runtime...");
-                const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-                this.detector = await faceLandmarksDetection.createDetector(model, {
-                    runtime: 'tfjs',
-                    refineLandmarks: false,
-                    maxFaces: 1
-                });
-                this.isLoaded = true;
-            } catch (fallbackErr) {
-                throw new Error(`BIOMETRIC_INIT_FAILED: ${err.message}`);
-            }
+            throw new Error(`BIOMETRIC_INIT_FAILED: ${err.message}`);
         }
     }
 

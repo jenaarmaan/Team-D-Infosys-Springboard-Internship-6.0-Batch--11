@@ -1,54 +1,79 @@
-import axios from 'axios';
 import { logger } from '../lib/logger';
 
 class GmailService {
     private GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
     /**
-     * Helper to get axios config with user token
+     * Helper to get fetch headers with user token
      */
-    private getConfig(token: string) {
+    private getHeaders(token: string) {
         return {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
         };
     }
 
-    async listEmails(token: string, options: { limit?: number; unread?: boolean } = {}) {
+    async listEmails(token: string, options: { limit?: number; unread?: boolean; q?: string } = {}) {
         try {
-            const { limit = 50, unread = false } = options;
+            const { limit = 50, unread = false, q } = options;
+
+            // Build the query
+            const queryParts = [];
+            if (unread) queryParts.push('is:unread');
+            if (q) queryParts.push(q);
+
             let url = `${this.GMAIL_API_BASE}/messages?maxResults=${limit}`;
-            if (unread) {
-                url += '&q=is:unread label:INBOX';
+            if (queryParts.length > 0) {
+                url += `&q=${encodeURIComponent(queryParts.join(' '))}`;
             } else {
                 url += '&labelIds=INBOX';
             }
 
-            const res = await axios.get(url, this.getConfig(token));
-            const messages = res.data.messages || [];
+            logger.info('Gmail List Request', { url });
 
-            // Detailed fetch for each (optional, but needed for front compatibility)
+            const response = await fetch(url, { headers: this.getHeaders(token) });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Gmail API List Error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            const messages = data.messages || [];
+
+            // Detailed fetch for each
+            // Reduced to 8 for reliability in serverless context
             const emails = await Promise.all(
                 messages.slice(0, 10).map(async (msg: any) => {
-                    const detail = await axios.get(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, this.getConfig(token));
-                    const headers = detail.data.payload.headers;
-                    const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+                    try {
+                        const detailRes = await fetch(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, {
+                            headers: this.getHeaders(token)
+                        });
+                        if (!detailRes.ok) return null;
 
-                    return {
-                        id: msg.id,
-                        threadId: detail.data.threadId,
-                        from: getHeader('From'),
-                        subject: getHeader('Subject'),
-                        date: getHeader('Date'),
-                        snippet: detail.data.snippet,
-                        isUnread: detail.data.labelIds?.includes('UNREAD')
-                    };
+                        const detail = await detailRes.json();
+                        const payload = detail.payload;
+                        if (!payload) return null;
+
+                        const headers = payload.headers || [];
+                        const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+
+                        return {
+                            id: msg.id,
+                            threadId: detail.threadId,
+                            from: getHeader('From'),
+                            subject: getHeader('Subject'),
+                            date: getHeader('Date'),
+                            snippet: detail.snippet,
+                            isUnread: detail.labelIds?.includes('UNREAD')
+                        };
+                    } catch (e: any) {
+                        logger.warn(`Failed to fetch metadata for message ${msg.id}`, { error: e.message });
+                        return null;
+                    }
                 })
             );
 
-            return emails;
+            return emails.filter(Boolean);
         } catch (error: any) {
             logger.error('Gmail list failed', error);
             throw error;
@@ -57,14 +82,22 @@ class GmailService {
 
     async getEmail(token: string, messageId: string) {
         try {
-            const res = await axios.get(`${this.GMAIL_API_BASE}/messages/${messageId}?format=full`, this.getConfig(token));
-            const payload = res.data.payload;
-            const headers = payload.headers;
+            const response = await fetch(`${this.GMAIL_API_BASE}/messages/${messageId}?format=full`, {
+                headers: this.getHeaders(token)
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Gmail API Get Error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            const payload = data.payload;
+            const headers = payload?.headers || [];
             const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
             return {
                 id: messageId,
-                threadId: res.data.threadId,
+                threadId: data.threadId,
                 from: getHeader('From'),
                 to: getHeader('To'),
                 subject: getHeader('Subject'),
@@ -93,8 +126,18 @@ class GmailService {
                 .replace(/\//g, '_')
                 .replace(/=+$/, '');
 
-            const res = await axios.post(`${this.GMAIL_API_BASE}/messages/send`, { raw: encodedMessage }, this.getConfig(token));
-            return res.data;
+            const response = await fetch(`${this.GMAIL_API_BASE}/messages/send`, {
+                method: 'POST',
+                headers: this.getHeaders(token),
+                body: JSON.stringify({ raw: encodedMessage })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Gmail API Send Error: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
         } catch (error: any) {
             logger.error('Gmail send failed', error);
             throw error;
@@ -119,11 +162,21 @@ class GmailService {
                 .replace(/\//g, '_')
                 .replace(/=+$/, '');
 
-            const res = await axios.post(`${this.GMAIL_API_BASE}/messages/send`, {
-                raw: encodedMessage,
-                threadId
-            }, this.getConfig(token));
-            return res.data;
+            const response = await fetch(`${this.GMAIL_API_BASE}/messages/send`, {
+                method: 'POST',
+                headers: this.getHeaders(token),
+                body: JSON.stringify({
+                    raw: encodedMessage,
+                    threadId
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Gmail API Reply Error: ${response.status} - ${errorText}`);
+            }
+
+            return await response.json();
         } catch (error: any) {
             logger.error('Gmail reply failed', error);
             throw error;
@@ -132,9 +185,19 @@ class GmailService {
 
     async markAsRead(token: string, messageId: string) {
         try {
-            await axios.post(`${this.GMAIL_API_BASE}/messages/${messageId}/modify`, {
-                removeLabelIds: ['UNREAD']
-            }, this.getConfig(token));
+            const response = await fetch(`${this.GMAIL_API_BASE}/messages/${messageId}/modify`, {
+                method: 'POST',
+                headers: this.getHeaders(token),
+                body: JSON.stringify({
+                    removeLabelIds: ['UNREAD']
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Gmail API MarkRead Error: ${response.status} - ${errorText}`);
+            }
+
             return { success: true };
         } catch (error: any) {
             logger.error('Gmail markRead failed', error);
