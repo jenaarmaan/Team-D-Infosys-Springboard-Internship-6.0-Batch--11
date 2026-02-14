@@ -1,71 +1,115 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+// src/api/client.ts
 
-/**
- * Unified API Client for Govind Production
- * Automatically handles versioning and authentication token injection.
- */
+import { auth } from "@/lib/firebase/firebase";
+
+export interface ApiResponse<T = any> {
+    success: boolean;
+    data: T;
+    error: {
+        code: string;
+        message: string;
+    } | null;
+}
+
+export interface ApiRequestOptions extends RequestInit {
+    googleToken?: string;
+}
+
 class ApiClient {
-    private axiosInstance: AxiosInstance;
-    private idToken: string | null = null;
-
-    constructor() {
-        this.axiosInstance = axios.create({
-            baseURL: '/api/v1',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-
-        // Request ID & Auth Injection Middleware
-        this.axiosInstance.interceptors.request.use((config) => {
-            // 1. Inject Authentication Token
-            if (this.idToken) {
-                config.headers.Authorization = `Bearer ${this.idToken}`;
-            }
-
-            // 2. Inject Request ID for Traceability
-            const requestId = `req-${Math.random().toString(36).substring(2, 11)}`;
-            config.headers['X-Request-ID'] = requestId;
-
-            return config;
-        });
-
-        // Standardized Error Handler
-        this.axiosInstance.interceptors.response.use(
-            (response) => {
-                // Enforce unified JSON response format from backend
-                if (response.data.success === false) {
-                    return Promise.reject(response.data.error);
-                }
-                return response;
-            },
-            (error) => {
-                const unifiedError = {
-                    code: error.response?.data?.error?.code || 'UNKNOWN_ERROR',
-                    message: error.response?.data?.error?.message || error.message,
-                    details: error.response?.data?.error?.details
-                };
-                console.error('[API CLIENT ERROR]', unifiedError);
-                return Promise.reject(unifiedError);
-            }
-        );
-    }
+    private baseUrl = ""; // Relative to deployment, e.g., /api/v1
 
     /**
-     * Update the internal Auth Token (called after Firebase Auth changes)
+     * Inject headers and handle request
      */
-    setAuthToken(token: string | null) {
-        this.idToken = token;
+    private async request<T>(
+        endpoint: string,
+        options: ApiRequestOptions = {},
+        retryCount = 0
+    ): Promise<ApiResponse<T>> {
+        const requestId = crypto.randomUUID();
+        const headers = new Headers(options.headers);
+
+        // 1. Inject ID Token
+        const user = auth.currentUser;
+        if (user) {
+            const token = await user.getIdToken();
+            headers.set("Authorization", `Bearer ${token}`);
+        }
+
+        // 2. Inject Google Token if provided
+        if (options.googleToken) {
+            headers.set("x-google-token", options.googleToken);
+        }
+
+        // 3. Inject Request ID
+        headers.set("x-request-id", requestId);
+        headers.set("Content-Type", "application/json");
+
+        try {
+            const response = await fetch(`${this.baseUrl}${endpoint}`, {
+                ...options,
+                headers,
+            });
+
+            // 3. Handle Token Refresh (401)
+            if (response.status === 401 && retryCount < 1) {
+                console.warn("[API] 401 Unauthorized. Refreshing token and retrying...");
+                if (user) {
+                    await user.getIdToken(true); // Force refresh
+                    return this.request<T>(endpoint, options, retryCount + 1);
+                }
+            }
+
+            const data = await response.json();
+
+            // Ensure unified format even if backend fails to provide it
+            if (!response.ok) {
+                return {
+                    success: false,
+                    data: null as any,
+                    error: data.error || {
+                        code: "SERVER_ERROR",
+                        message: data.message || "An unexpected error occurred",
+                    },
+                };
+            }
+
+            return data as ApiResponse<T>;
+        } catch (error: any) {
+            console.error(`[API] Request failed: ${endpoint}`, error);
+            return {
+                success: false,
+                data: null as any,
+                error: {
+                    code: "NETWORK_ERROR",
+                    message: error.message || "Network request failed",
+                },
+            };
+        }
     }
 
-    async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-        const response = await this.axiosInstance.get<{ success: true; data: T }>(url, config);
-        return response.data.data;
+    async get<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
+        return this.request<T>(endpoint, { ...options, method: "GET" });
     }
 
-    async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-        const response = await this.axiosInstance.post<{ success: true; data: T }>(url, data, config);
-        return response.data.data;
+    async post<T>(endpoint: string, body: any, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
+        return this.request<T>(endpoint, {
+            ...options,
+            method: "POST",
+            body: JSON.stringify(body),
+        });
+    }
+
+    async put<T>(endpoint: string, body: any, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
+        return this.request<T>(endpoint, {
+            ...options,
+            method: "PUT",
+            body: JSON.stringify(body),
+        });
+    }
+
+    async delete<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
+        return this.request<T>(endpoint, { ...options, method: "DELETE" });
     }
 }
 

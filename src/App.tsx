@@ -1,49 +1,190 @@
-import React, { useEffect } from 'react';
-import { apiClient } from './api/client';
+// src/App.tsx
 
-function App() {
-    useEffect(() => {
-        // Health check logic used as internal verification
-        apiClient.get('/health')
-            .then(data => console.log('[PROD BOOT] API Health:', data))
-            .catch(err => console.error('[PROD BOOT] API Unreachable:', err));
-    }, []);
+import { useEffect, useRef } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { GovindProvider, useGovind } from "@/contexts/GovindContext";
+import { GmailProvider } from "@/contexts/GmailContext";
+import { TelegramProvider } from "@/contexts/TelegramContext";
+import { SettingsProvider, useSettings } from "@/contexts/SettingsContext";
+import { auth } from "@/lib/firebase/firebase";
+import {
+  initVoiceRecognition,
+  startListening,
+  stopListening,
+} from "@/lib/govind/voiceStateController";
+import { initPlatforms } from "@/lib/platforms/init";
+import { bindVoiceLifecycle } from "@/lib/govind/voiceLifecycle";
+import { messagingPlatformService } from "@/services/messagingPlatformService";
+// Initialize all platform adapters (Gmail, Telegram, WhatsApp)
+initPlatforms();
 
-    return (
-        <div className="min-h-screen bg-[#0a0c10] text-white flex flex-col items-center justify-center p-4">
-            <header className="text-center space-y-4">
-                <h1 className="text-5xl font-extrabold tracking-tighter bg-gradient-to-r from-cyan-400 to-teal-500 bg-clip-text text-transparent">
-                    GOVIND
-                </h1>
-                <p className="text-zinc-500 font-medium max-w-md">
-                    Enterprise-Hardened Secure Voice Assistant
-                </p>
-            </header>
+// Initialize messaging platforms from environment
+messagingPlatformService.initialize().then((status) => {
+  console.log('[APP] Platform initialization complete:', status);
+  if (status.telegram) console.log('[APP] ✅ Telegram ready');
+}).catch((err) => {
+  console.error('[APP] Platform initialization error:', err);
+});
 
-            <main className="mt-12 w-full max-w-lg bg-[#11141b] border border-zinc-800 rounded-2xl p-8 shadow-2xl">
-                <div className="flex items-center gap-4 text-zinc-400">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span className="text-sm font-semibold tracking-wider uppercase">Production Active</span>
-                </div>
+// Pages
+import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import Gmail from "./pages/Gmail";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Docs from "./pages/Docs";
+import { Outlook, WhatsApp } from "./pages/Platforms";
+import Telegram from "./pages/Telegram";
+import NotFound from "./pages/NotFound";
+import GmailOAuth from "./pages/GmailOAuth";
 
-                <div className="mt-8 space-y-6">
-                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
-                        <h2 className="text-xs font-bold text-zinc-500 uppercase">Architecture</h2>
-                        <p className="mt-1 text-sm font-medium">Serverless API v1 + Google Gemini AI</p>
-                    </div>
+/* ======================================================
+   🔍 FIREBASE AUTH DEBUG (SAFE)
+   ====================================================== */
 
-                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
-                        <h2 className="text-xs font-bold text-zinc-500 uppercase">Security</h2>
-                        <p className="mt-1 text-sm font-medium">RBAC-Ready Auth & Idempotent Webhooks</p>
-                    </div>
-                </div>
-            </main>
+auth.onAuthStateChanged((user) => {
+  console.log("[FIREBASE AUTH]", user ? user.email : "NOT LOGGED IN");
+});
 
-            <footer className="mt-auto py-8 text-zinc-600 text-xs font-medium">
-                Team D - Infosys Springboard - Batch 11
-            </footer>
-        </div>
+const queryClient = new QueryClient();
+
+/* ======================================================
+   🎙️ VOICE BOOTSTRAP (SINGLE ENTRY POINT)
+   ====================================================== */
+
+const VoiceBootstrap = () => {
+  const { state, assistantEnabled } = useGovind();
+  const { continuousListening, wakeWordSensitivity } = useSettings();
+
+  const recognitionRef = useRef<any>(null);
+  const stateRef = useRef(state);
+
+  // Keep latest state
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.error("[VOICE] SpeechRecognition not supported");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognitionRef.current = recognition;
+
+    // Init mic controller
+    initVoiceRecognition(recognition);
+
+    // Bind voice → Govind pipeline
+    bindVoiceLifecycle(
+      recognition,
+      () => stateRef.current,
+      (text: string) => {
+        console.log("[VOICE] Lifecycle transcript:", text);
+      },
+      () => {
+        console.log("[VOICE] Reset requested");
+      },
+      () => wakeWordSensitivity
     );
-}
+
+    console.log("[VOICE] Ready — waiting for user gesture");
+  }, []);
+
+  // 🔄 React to Continuous Listening Setting
+  useEffect(() => {
+    if (assistantEnabled) {
+      if (continuousListening) {
+        console.log("[VOICE] Continuous listening enabled — starting mic");
+        startListening();
+      } else {
+        console.log("[VOICE] Continuous listening disabled — stopping mic");
+        stopListening();
+      }
+    }
+  }, [continuousListening, assistantEnabled]);
+
+  return null;
+};
+
+/* ======================================================
+   🚀 APP ROOT
+   ====================================================== */
+const RouteDebugger = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    console.log("[ROUTE DEBUG] Current path:", location.pathname);
+  }, [location.pathname]);
+
+  return null;
+};
+
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SettingsProvider>
+        <TooltipProvider>
+          <BrowserRouter>
+
+            {/* 🔐 Gmail must wrap Govind */}
+            <TelegramProvider>
+              <GmailProvider>
+                <GovindProvider>
+                  {/* 🎙️ VOICE SYSTEM (GLOBAL, ONCE) */}
+                  <VoiceBootstrap />
+                  {/* 🌐 ROUTER */}
+                  <Routes>
+                    {/* Public */}
+                    <Route path="/" element={<Index />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+
+                    {/* Core */}
+                    <Route path="/dashboard" element={<Dashboard />} />
+
+                    {/* Platforms */}
+                    <Route path="/gmail-oauth" element={<GmailOAuth />} />
+                    <Route path="/gmail" element={<Gmail />} />
+                    <Route path="/outlook" element={<Outlook />} />
+                    <Route path="/telegram" element={<Telegram />} />
+                    <Route path="/whatsapp" element={<WhatsApp />} />
+
+                    {/* User */}
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/docs" element={<Docs />} />
+
+                    {/* Fallback */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  {/* 🔔 GLOBAL UI */}
+                  <Toaster />
+                  <Sonner />
+                </GovindProvider>
+              </GmailProvider>
+            </TelegramProvider>
+
+          </BrowserRouter>
+        </TooltipProvider>
+      </SettingsProvider>
+    </QueryClientProvider>
+  );
+};
+
 
 export default App;
