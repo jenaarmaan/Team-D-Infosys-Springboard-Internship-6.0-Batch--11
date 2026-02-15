@@ -44,24 +44,42 @@ class BiometricService {
     }
 
     public async init(): Promise<void> {
-        if (this.isLoaded) return;
+        if (this.isLoaded) {
+            console.log("[BIOMETRIC] System already initialized.");
+            return;
+        }
+
         try {
             console.log("[BIOMETRIC] System initializing...");
+            console.log("[BIOMETRIC] TF backend before ready:", tf.getBackend());
+
             await tf.ready();
 
             // Try to set the best backend
             if (tf.getBackend() !== 'webgl') {
-                try { await tf.setBackend('webgl'); } catch (e) { console.warn("WebGL not available, using", tf.getBackend()); }
+                try {
+                    await tf.setBackend('webgl');
+                    console.log("[BIOMETRIC] TF backend explicitly set to webgl");
+                } catch (e) {
+                    console.warn("[BIOMETRIC] WebGL not available, using", tf.getBackend());
+                }
             }
 
-            const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+            console.log("[BIOMETRIC] TF backend after ready:", tf.getBackend());
 
-            // ⚡ Use tfjs runtime for maximum stability in diverse browser environments
-            this.detector = await faceLandmarksDetection.createDetector(model, {
+            const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+            const detectorConfig: any = {
                 runtime: 'tfjs',
                 refineLandmarks: false,
-                maxFaces: 1
-            });
+                maxFaces: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            };
+
+            console.log("[BIOMETRIC] Detector config:", detectorConfig);
+
+            // ⚡ Use tfjs runtime for maximum stability in diverse browser environments
+            this.detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
 
             console.log("[BIOMETRIC] MediaPipe FaceMesh loaded successfully.");
 
@@ -130,9 +148,10 @@ class BiometricService {
                 try {
                     const faces = await this.detector!.estimateFaces(video, { flipHorizontal: false });
 
-                    if (frameCount % 30 === 0) {
-                        console.log(`[BIOMETRIC] Scanning... Faces found: ${faces.length}`);
-                        console.log("[BIOMETRIC] FaceMesh result sample:", faces[0] || "None");
+                    // 🎯 Advanced Debug: Log raw output periodically to verify "Detecting vs Loading"
+                    if (frameCount % 60 === 0) {
+                        console.log("[BIOMETRIC] Raw estimateFaces output:", faces);
+                        console.log("[BIOMETRIC] Current Face count:", faces.length);
                     }
 
                     if (faces.length > 0) {
