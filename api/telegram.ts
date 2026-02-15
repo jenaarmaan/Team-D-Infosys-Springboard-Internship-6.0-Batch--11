@@ -1,8 +1,8 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { withMiddleware, AuthenticatedRequest } from '../../lib/middleware';
-import { telegramService } from '../../services/telegram.service';
-import { validator } from '../../lib/validator';
-import { logger } from '../../lib/logger';
+import { withMiddleware, AuthenticatedRequest } from '../src/server/lib/middleware';
+import { telegramService } from '../src/server/services/telegram.service';
+import { validator } from '../src/server/lib/validator';
+import { logger } from '../src/server/lib/logger';
 
 /**
  * [POST] /api/v1/telegram/send_internal
@@ -72,6 +72,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (action === 'send') {
         return sendHandler(req, res);
+    }
+
+    if (action === 'updates') {
+        return withMiddleware(async (authenticatedReq: AuthenticatedRequest, response: VercelResponse) => {
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+            const updates = await telegramService.getUpdates(authenticatedReq.uid, limit);
+            return response.status(200).json({ success: true, data: updates, error: null });
+        })(req, res);
     }
 
     // Default or explicit webhook

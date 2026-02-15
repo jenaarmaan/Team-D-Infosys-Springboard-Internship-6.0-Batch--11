@@ -33,8 +33,28 @@
     ],
     "rewrites": [
         {
-            "source": "/api/v1/:path*",
-            "destination": "/api/v1/:path*"
+            "source": "/api/v1/gmail/:path*",
+            "destination": "/api/gmail/:path*"
+        },
+        {
+            "source": "/api/v1/telegram/:path*",
+            "destination": "/api/telegram/:path*"
+        },
+        {
+            "source": "/api/v1/ai/:path*",
+            "destination": "/api/ai/:path*"
+        },
+        {
+            "source": "/api/v1/health",
+            "destination": "/api/health"
+        },
+        {
+            "source": "/api/v1/gmail",
+            "destination": "/api/gmail"
+        },
+        {
+            "source": "/api/v1/telegram",
+            "destination": "/api/telegram"
         },
         {
             "source": "/(.*)",

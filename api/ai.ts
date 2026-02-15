@@ -1,7 +1,7 @@
 import { VercelResponse } from '@vercel/node';
-import { withMiddleware, AuthenticatedRequest } from '../../lib/middleware';
-import { geminiService } from '../../services/gemini.service';
-import { validator } from '../../lib/validator';
+import { withMiddleware, AuthenticatedRequest } from '../src/server/lib/middleware';
+import { geminiService } from '../src/server/services/gemini.service';
+import { validator } from '../src/server/lib/validator';
 
 /**
  * [POST] /api/v1/ai/gemini

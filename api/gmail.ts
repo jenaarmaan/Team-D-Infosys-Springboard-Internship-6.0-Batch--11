@@ -1,9 +1,9 @@
 import { VercelResponse } from '@vercel/node';
-import { withMiddleware, AuthenticatedRequest } from '../../lib/middleware';
-import { gmailService } from '../../services/gmail.service';
-import { tokenService } from '../../services/token.service';
-import { validator } from '../../lib/validator';
-import { logger } from '../../lib/logger';
+import { withMiddleware, AuthenticatedRequest } from '../src/server/lib/middleware';
+import { gmailService } from '../src/server/services/gmail.service';
+import { tokenService } from '../src/server/services/token.service';
+import { validator } from '../src/server/lib/validator';
+import { logger } from '../src/server/lib/logger';
 
 /**
  * [ALL] /api/v1/gmail

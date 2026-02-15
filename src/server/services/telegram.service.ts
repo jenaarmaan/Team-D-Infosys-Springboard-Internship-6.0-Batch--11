@@ -92,6 +92,29 @@ export class TelegramService {
     }
 
     /**
+     * Fetch recent updates for a user from Firestore
+     */
+    async getUpdates(uid: string, limit: number = 50): Promise<any[]> {
+        if (!db) return [];
+        try {
+            const snapshot = await db.collection('telegram_updates')
+                .doc(uid)
+                .collection('updates')
+                .orderBy('date', 'desc')
+                .limit(limit)
+                .get();
+
+            return snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        } catch (error) {
+            logger.error('Failed to fetch Telegram updates', error, { uid });
+            return [];
+        }
+    }
+
+    /**
      * Resolves Firebase UID from Telegram Chat ID
      * Looks up user profile in Firestore
      */
