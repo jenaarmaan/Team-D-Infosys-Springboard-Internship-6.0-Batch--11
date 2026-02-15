@@ -102,6 +102,8 @@ export const completeRegistration = async ({
     }
 
     const uid = user.uid;
+    console.log("REGISTER UID:", uid);
+    console.log("REGISTER EMAIL:", user.email);
     console.log("[REGISTRATION] UID confirmed:", uid);
 
     /* ================= STEP 2 ================= */
@@ -110,7 +112,14 @@ export const completeRegistration = async ({
     console.log("[REGISTRATION] Step 2: Creating Firestore profile");
     try {
       await createUserProfile(uid, email);
-    } catch {
+    } catch (err: any) {
+      console.error("[REGISTRATION] Firestore profile creation failed. Rolling back auth...", err);
+      try {
+        await user.delete();
+        console.log("[REGISTRATION] Rollback successful: Auth user deleted.");
+      } catch (deleteErr) {
+        console.error("[REGISTRATION] Rollback failed: Could not delete auth user.", deleteErr);
+      }
       throw {
         message: "Failed to create user profile",
         code: "PROFILE_FAILED",
