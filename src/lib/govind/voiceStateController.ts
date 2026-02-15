@@ -38,12 +38,7 @@ const resetDeadlockTimer = () => {
       pauseReasons.clear();
       restartInProgress = false;
       pausedByTTS = false;
-      if (micState !== "LISTENING" && recognition) {
-        try {
-          recognition.start();
-          micState = "LISTENING";
-        } catch { }
-      }
+      safeStart("deadlock-recovery");
     }
   }, DEADLOCK_TIMEOUT_MS);
 };
@@ -54,17 +49,54 @@ export const forceUnlockMic = () => {
   restartInProgress = false;
   pausedByTTS = false;
   if (deadlockTimer) clearTimeout(deadlockTimer);
-  if (micState !== "LISTENING" && recognition) {
-    try {
-      recognition.start();
-      micState = "LISTENING";
-    } catch { }
-  }
+  safeStart("force-unlock");
 };
 
 /* ======================================================
    🔌 INIT (ONCE ONLY)
    ====================================================== */
+
+let lastErrorType = "";
+let lastErrorTime = 0;
+let lastStartTime = 0;
+
+const safeStart = (source: string) => {
+  if (!recognition) return;
+  if (micState === "LISTENING") {
+    return;
+  }
+  if (pauseReasons.size > 0) {
+    console.log(`[VOICE] ${source} — start blocked by`, Array.from(pauseReasons));
+    return;
+  }
+
+  const now = Date.now();
+  // Prevent rapid-fire starts (min 500ms apart)
+  if (now - lastStartTime < 500) {
+    return;
+  }
+
+  // If we just had an 'aborted' error, wait longer
+  if (lastErrorType === 'aborted' && now - lastErrorTime < 2000) {
+    console.log(`[VOICE] ${source} — backing off after abort`);
+    return;
+  }
+
+  try {
+    recognition.start();
+    lastStartTime = now;
+    micState = "LISTENING";
+    console.log(`[VOICE] Mic opened (${source})`);
+  } catch (err: any) {
+    if (err.name === 'InvalidStateError') {
+      micState = "LISTENING";
+    } else {
+      console.warn(`[VOICE] ${source} start failed:`, err);
+      micState = "IDLE";
+    }
+    restartInProgress = false;
+  }
+};
 
 export const initVoiceRecognition = (rec: any) => {
   if (recognition) {
@@ -79,62 +111,40 @@ export const initVoiceRecognition = (rec: any) => {
   recognition.onstart = () => {
     micState = "LISTENING";
     restartInProgress = false;
-    console.log("[VOICE] Mic opened");
+    lastErrorType = ""; // Reset errors on success
   };
 
   recognition.onend = () => {
-    console.log("[VOICE] onend received. Current state:", micState, "Pause reasons:", Array.from(pauseReasons));
+    console.log("[VOICE] onend received. State:", micState, "Reasons:", Array.from(pauseReasons));
 
-    // If state is not LISTENING, it means we stopped intentionally or had an error
-    if (micState !== "LISTENING") {
+    // If we're here, the session is definitely closed
+    if (micState !== "PAUSED_BY_REASON") {
       micState = "IDLE";
     }
 
-    // ⛔ DO NOT restart if there are active pause reasons
-    if (pauseReasons.size > 0) {
-      console.log("[VOICE] onend — paused by reasons, skip auto-restart");
+    if (pauseReasons.size > 0 || restartInProgress) {
       return;
     }
 
-    if (restartInProgress) {
-      console.log("[VOICE] onend — restart already in progress, skipping");
-      return;
-    }
-
-    // 🚀 AUTO-RESTART
+    // 🚀 AUTO-RESTART with backoff
     restartInProgress = true;
     resetDeadlockTimer();
 
-    setTimeout(() => {
-      if (pauseReasons.size > 0) {
-        restartInProgress = false;
-        return;
-      }
+    const delay = lastErrorType === 'aborted' ? 1000 : 200;
 
-      try {
-        console.log("[VOICE] onend — attempting auto-restart");
-        recognition.start();
-        micState = "LISTENING";
-      } catch (err: any) {
-        if (err.name === 'InvalidStateError') {
-          console.log("[VOICE] restart skipped: already started");
-        } else {
-          console.warn("[VOICE] auto-restart failed", err);
-        }
-        restartInProgress = false;
-      }
-    }, 100);
+    setTimeout(() => {
+      restartInProgress = false;
+      safeStart("auto-restart");
+    }, delay);
   };
 
   recognition.onerror = (event: any) => {
+    lastErrorType = event.error;
+    lastErrorTime = Date.now();
     console.error("[VOICE] Mic error:", event.error, event.message);
 
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       pauseListening("ERROR");
-    }
-
-    if (event.error === 'network') {
-      console.warn("[VOICE] Network error detected, letting onend handle recovery");
     }
 
     micState = "IDLE";
@@ -149,36 +159,7 @@ export const initVoiceRecognition = (rec: any) => {
    ====================================================== */
 
 export const startListening = () => {
-  if (!recognition) {
-    console.warn("[VOICE] startListening before init");
-    return;
-  }
-
-  if (micState === "LISTENING") {
-    console.log("[VOICE] Mic already listening — ignored");
-    return;
-  }
-
-  if (pauseReasons.size > 0) {
-    console.log(
-      "[VOICE] startListening blocked by",
-      Array.from(pauseReasons)
-    );
-    return;
-  }
-
-  try {
-    if (restartInProgress) {
-      console.log("[VOICE] startListening ignored — restart in progress");
-      return;
-    }
-    recognition.start();
-    micState = "LISTENING";
-    console.log("[VOICE] Listening started");
-  } catch (err) {
-    console.warn("[VOICE] startListening failed", err);
-    micState = "IDLE";
-  }
+  safeStart("manual-start");
 };
 
 /* ======================================================
@@ -220,14 +201,8 @@ export const resumeListening = (reason: PauseReason) => {
     pausedByTTS = false;
   }
 
-  try {
-    console.log("[VOICE] resumeListening — attempting restart");
-    recognition.start();
-    micState = "LISTENING";
-    if (deadlockTimer) clearTimeout(deadlockTimer);
-  } catch (err) {
-    console.warn("[VOICE] resumeListening failed", err);
-  }
+  if (deadlockTimer) clearTimeout(deadlockTimer);
+  safeStart("resume");
 };
 
 /* ======================================================
@@ -266,14 +241,8 @@ export const resumeAfterWake = () => {
     console.log("[VOICE] GLOBAL_EXIT cleared on wake");
   }
 
-  if (pauseReasons.size === 0 && micState !== "LISTENING") {
-    try {
-      recognition?.start();
-      micState = "LISTENING";
-      console.log("[VOICE] Mic resumed after wake");
-    } catch (err) {
-      console.warn("[VOICE] Wake resume failed", err);
-    }
+  if (pauseReasons.size === 0) {
+    safeStart("wake-resume");
   }
 };
 
