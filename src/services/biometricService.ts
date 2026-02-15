@@ -92,8 +92,20 @@ class BiometricService {
         let frameCount = 0;
 
         console.log("[BIOMETRIC] Starting liveness scan loop...");
+        console.log("[BIOMETRIC] Video readyState:", video.readyState);
+        console.log("[BIOMETRIC] Video resolution:", video.videoWidth, "x", video.videoHeight);
 
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
+            // 🛑 Ensure video is ready before loop starts
+            if (video.readyState < 2) {
+                console.log("[BIOMETRIC] Waiting for video to be ready (readyState >= 2)...");
+                await new Promise(res => {
+                    video.onloadeddata = () => res(true);
+                    // Fallback for already loaded or other events
+                    if (video.readyState >= 2) res(true);
+                });
+            }
+
             const processFrame = async () => {
                 frameCount++;
 
@@ -104,9 +116,9 @@ class BiometricService {
                     return;
                 }
 
-                // Ensure video is ready and has dimensions
-                if (video.readyState < 2 || video.videoWidth === 0) {
-                    if (frameCount % 60 === 0) console.log("[BIOMETRIC] Video not ready yet...");
+                // Double check dimensions each frame (handles resize or stream changes)
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    if (frameCount % 60 === 0) console.log("[BIOMETRIC] Video stream exists but dimensions are zero...");
                     requestAnimationFrame(processFrame);
                     return;
                 }
@@ -120,6 +132,7 @@ class BiometricService {
 
                     if (frameCount % 30 === 0) {
                         console.log(`[BIOMETRIC] Scanning... Faces found: ${faces.length}`);
+                        console.log("[BIOMETRIC] FaceMesh result sample:", faces[0] || "None");
                     }
 
                     if (faces.length > 0) {
