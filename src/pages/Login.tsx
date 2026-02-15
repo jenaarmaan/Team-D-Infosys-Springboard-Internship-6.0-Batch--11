@@ -30,7 +30,12 @@ const Login = () => {
       try {
         console.log("[LOGIN] Starting Biometric Hardware...");
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: 640, height: 480 }
+          video: {
+            facingMode: "user",
+            width: 640,
+            height: 480,
+            frameRate: { ideal: 30 }
+          }
         });
 
         streamRef.current = stream;
@@ -171,13 +176,13 @@ const Login = () => {
                   )}
                 </div>
 
-                <div className="relative w-72 h-72 rounded-3xl overflow-hidden bg-black shadow-2xl border-4 border-white/5">
+                <div className="relative w-72 h-72 bg-black shadow-2xl border-4 border-white/5">
                   <video
                     ref={videoRef}
                     autoPlay
                     muted
                     playsInline
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                   />
 
                   <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-md p-4 text-left border-t border-white/10">

@@ -38,7 +38,12 @@ const Register = () => {
 
         // 2. Request Camera
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: 640, height: 480 },
+          video: {
+            facingMode: "user",
+            width: 640,
+            height: 480,
+            frameRate: { ideal: 30 }
+          },
         });
 
         streamRef.current = stream;
@@ -158,13 +163,13 @@ const Register = () => {
                   <div className="absolute inset-x-0 h-1 bg-primary/50 shadow-[0_0_15px_rgba(var(--primary),0.5)] animate-[scan_3s_ease-in-out_infinite]" />
                 </div>
 
-                <div className="relative w-72 h-72 rounded-3xl overflow-hidden bg-black shadow-2xl border-4 border-white/5">
+                <div className="relative w-72 h-72 bg-black shadow-2xl border-4 border-white/5">
                   <video
                     ref={videoRef}
                     autoPlay
                     muted
                     playsInline
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                   />
 
                   {/* Status HUD */}
