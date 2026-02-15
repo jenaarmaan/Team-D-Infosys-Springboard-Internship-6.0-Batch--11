@@ -4,6 +4,21 @@ import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
 
+// 0. Strict Environment Validation (Step 5)
+const requiredViteEnvs = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_GOOGLE_CLIENT_ID'
+];
+
+requiredViteEnvs.forEach(env => {
+  if (!import.meta.env[env]) {
+    console.error(`MISSING ENV VARIABLE: ${env}`);
+    throw new Error(`CRITICAL: Environment variable ${env} is undefined.`);
+  }
+});
+
 // 1. Precise Config Construction (Strictly using import.meta.env for Vite)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

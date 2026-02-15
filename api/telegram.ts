@@ -56,6 +56,10 @@ async function webhookHandler(req: VercelRequest, res: VercelResponse) {
  * Consolidated Telegram API Handler
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    console.log("SERVER TELEGRAM CHECK:", {
+        hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
+    });
+
     if (req.method !== 'POST') {
         return res.status(405).json({
             success: false,

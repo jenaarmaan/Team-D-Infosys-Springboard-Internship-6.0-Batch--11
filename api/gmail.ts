@@ -14,13 +14,20 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
     const { action } = req.query;
     const uid = req.uid;
 
+    console.log("SERVER ENV CHECK:", {
+        hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+        hasSecret: !!process.env.GOOGLE_CLIENT_SECRET
+    });
+
     try {
         // 1. Securely retrieve/refresh token from Firestore (Point 6)
         // Note: x-google-token fallback removed for security; server is the source of truth.
         const accessToken = await tokenService.getValidToken(uid);
 
         // 2. Logging required for audit (Point 7)
-        console.log("Using access token:", accessToken?.slice(0, 10));
+        console.log("UID FROM TOKEN:", uid);
+        console.log("TOKEN FOUND IN DB:", !!accessToken);
+        console.log("USING ACCESS TOKEN:", accessToken?.slice(0, 10));
 
         switch (action) {
             case 'list': {

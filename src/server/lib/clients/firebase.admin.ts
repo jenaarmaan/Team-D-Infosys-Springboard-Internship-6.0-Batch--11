@@ -8,7 +8,12 @@ export function getFirebaseAdmin() {
         return admin.apps[0]!;
     }
 
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (!serviceAccountKey) {
+        console.error("MISSING ENV VARIABLE: FIREBASE_SERVICE_ACCOUNT_KEY");
+        throw new Error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is undefined.");
+    }
+    const serviceAccount = JSON.parse(serviceAccountKey);
 
     if (!serviceAccount.project_id) {
         console.warn('[FIREBASE ADMIN] Initializing without Service Account (IAM/Default credentials)');

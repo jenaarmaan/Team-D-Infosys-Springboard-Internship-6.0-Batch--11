@@ -14,6 +14,17 @@ export class TokenService {
     private clientId = process.env.GOOGLE_CLIENT_ID;
     private clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
+    constructor() {
+        if (!this.clientId) {
+            console.error("MISSING ENV VARIABLE: GOOGLE_CLIENT_ID");
+            throw new Error("CRITICAL: GOOGLE_CLIENT_ID is undefined.");
+        }
+        if (!this.clientSecret) {
+            console.error("MISSING ENV VARIABLE: GOOGLE_CLIENT_SECRET");
+            throw new Error("CRITICAL: GOOGLE_CLIENT_SECRET is undefined.");
+        }
+    }
+
     /**
      * Get valid access token for a user
      * Reads from Firestore, refreshes if expired.

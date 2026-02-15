@@ -9,6 +9,15 @@ import axios from 'axios';
 export class TelegramService {
     private botToken = process.env.TELEGRAM_BOT_TOKEN;
 
+    constructor() {
+        if (!this.botToken) {
+            console.error("MISSING ENV VARIABLE: TELEGRAM_BOT_TOKEN");
+            if (process.env.NODE_ENV === 'production') {
+                throw new Error("CRITICAL: TELEGRAM_BOT_TOKEN is undefined.");
+            }
+        }
+    }
+
     /**
      * Send a message to a Telegram chat
      */
@@ -61,6 +70,7 @@ export class TelegramService {
             }
 
             const fullPath = `telegram_updates/${uid}/updates/update_${updateId}`;
+            console.log("WRITING TO TELEGRAM PATH:", fullPath);
             logger.info('TELEGRAM FIRESTORE FULL PATH (WRITE):', { path: fullPath });
 
             const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
