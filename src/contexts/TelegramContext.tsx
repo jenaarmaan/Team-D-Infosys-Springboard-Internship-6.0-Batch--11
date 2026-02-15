@@ -139,8 +139,13 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
 
             console.log("Firestore path UID:", user.uid);
             console.log("Firestore path EMAIL:", user.email);
-            // Listen for new updates in the telegram_updates collection
-            const updatesRef = collection(db, "telegram_updates");
+
+            // 🔒 SECURITY: Use UID-based subcollection path
+            const fullPathString = `telegram_updates/${user.uid}/updates`;
+            console.log("TELEGRAM FIRESTORE FULL PATH:", fullPathString);
+
+            // Listen for new updates in the telegram_updates/{uid}/updates collection
+            const updatesRef = collection(db, "telegram_updates", user.uid, "updates");
             const q = query(
                 updatesRef,
                 orderBy("date", "desc"),
