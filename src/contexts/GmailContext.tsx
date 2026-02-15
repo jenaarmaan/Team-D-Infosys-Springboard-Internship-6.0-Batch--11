@@ -94,6 +94,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      console.log("Firestore path UID:", user.uid);
+      console.log("Firestore path EMAIL:", user.email);
       const snap = await getDoc(doc(db, "gmail_tokens", user.uid));
       setGmailConnected(snap.exists() && snap.data()?.connected === true);
     };
@@ -208,6 +210,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         // Google tokens actually expire in 1h, but GAPI often allows grace periods or we just want to suppress the prompt
         const expiresAt = Date.now() + 100 * 24 * 60 * 60 * 1000;
 
+        console.log("Firestore path UID:", user.uid);
+        console.log("Firestore path EMAIL:", user.email);
         await setDoc(doc(db, "gmail_tokens", user.uid), {
           accessToken: token,
           expiresAt,
@@ -236,6 +240,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
   const disconnect = async () => {
     const user = auth.currentUser;
     if (user) {
+      console.log("Firestore path UID:", user.uid);
+      console.log("Firestore path EMAIL:", user.email);
       await deleteDoc(doc(db, "gmail_tokens", user.uid));
     }
 

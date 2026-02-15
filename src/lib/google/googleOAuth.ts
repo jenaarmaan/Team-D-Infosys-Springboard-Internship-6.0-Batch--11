@@ -69,6 +69,7 @@ export async function connectGmail(): Promise<void> {
             const expiresAt =
               Date.now() + response.expires_in * 1000;
 
+            console.log("Firestore path UID:", uid);
             await setDoc(
               doc(db, "gmail_tokens", uid),
               {

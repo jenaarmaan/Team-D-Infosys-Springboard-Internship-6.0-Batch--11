@@ -137,6 +137,8 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
 
             console.log("[TELEGRAM] Initializing Firestore real-time listener for", user.email);
 
+            console.log("Firestore path UID:", user.uid);
+            console.log("Firestore path EMAIL:", user.email);
             // Listen for new updates in the telegram_updates collection
             const updatesRef = collection(db, "telegram_updates");
             const q = query(

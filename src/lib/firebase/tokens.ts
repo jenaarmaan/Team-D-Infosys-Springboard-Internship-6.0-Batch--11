@@ -27,6 +27,7 @@ export const saveGmailToken = async (
     token_type?: string;
   }
 ): Promise<void> => {
+  console.log("Firestore path UID:", uid);
   await setDoc(doc(db, "gmail_tokens", uid), {
     ...tokenData,
     uid,
@@ -43,6 +44,7 @@ export const saveGmailToken = async (
 export const getGmailToken = async (
   uid: string
 ): Promise<any | null> => {
+  console.log("Firestore path UID:", uid);
   const snap = await getDoc(doc(db, "gmail_tokens", uid));
   return snap.exists() ? snap.data() : null;
 };
@@ -51,6 +53,7 @@ export const getGmailToken = async (
  * Clear Gmail OAuth token (logout / disconnect)
  */
 export const clearGmailToken = async (uid: string): Promise<void> => {
+  console.log("Firestore path UID:", uid);
   await deleteDoc(doc(db, "gmail_tokens", uid));
   console.log("[FIRESTORE] Gmail token cleared for user:", uid);
 };

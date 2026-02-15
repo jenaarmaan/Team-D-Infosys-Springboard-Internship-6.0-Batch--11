@@ -50,6 +50,8 @@ export const createUserProfile = async (
   uid: string,
   email: string
 ): Promise<void> => {
+  console.log("Firestore path UID:", uid);
+  console.log("Firestore path EMAIL:", email);
   const ref = doc(db, "users", uid);
 
   const profile: UserProfile = {
@@ -90,6 +92,7 @@ export const createUserProfile = async (
 export const getUserProfile = async (
   uid: string
 ): Promise<UserProfile | null> => {
+  console.log("Firestore path UID:", uid);
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
@@ -100,6 +103,11 @@ import { query, where, getDocs, collection } from "firebase/firestore";
  * Fetch security state by email (for pre-login UI)
  */
 export const getSecurityStateByEmail = async (email: string) => {
+  console.log("Firestore path EMAIL:", email);
+  /** 
+   * ⚠️ SECURITY WARNING: This query bypasses UID-based security rules.
+   * If failing with 'Insufficient Permissions', this function is the likely cause.
+   */
   const q = query(collection(db, "users"), where("email", "==", email));
   const snap = await getDocs(q);
 
@@ -120,6 +128,7 @@ export const getSecurityStateByEmail = async (email: string) => {
  * Used by login flow only
  */
 export const getAuthSecurityState = async (uid: string) => {
+  console.log("Firestore path UID:", uid);
   const snap = await getDoc(doc(db, "users", uid));
 
   if (!snap.exists()) {
@@ -145,11 +154,12 @@ export const getAuthSecurityState = async (uid: string) => {
  */
 export const updateVoicePinHash = async (
   uid: string,
-  hash: string
+  pinHash: string
 ): Promise<void> => {
+  console.log("Firestore path UID:", uid);
   try {
     await updateDoc(doc(db, "users", uid), {
-      "security.voicePinHash": hash,
+      "security.voicePinHash": pinHash,
       "security.voicePinEnabled": true,
     });
 
@@ -169,7 +179,8 @@ export const updateVoicePinHash = async (
  * We store "LOCAL" as the URL because the actual image is in browser LocalStorage
  * to avoid cloud storage costs.
  */
-export const markFaceRegistered = async (uid: string, _faceImageUrl: string): Promise<void> => {
+export const markFaceRegistered = async (uid: string, faceImageUrl: string): Promise<void> => {
+  console.log("Firestore path UID:", uid);
   try {
     await updateDoc(doc(db, "users", uid), {
       "security.faceRegistered": true,

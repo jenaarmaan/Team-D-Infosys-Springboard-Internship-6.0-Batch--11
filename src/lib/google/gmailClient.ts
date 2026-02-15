@@ -69,6 +69,7 @@ export async function getValidAccessToken(): Promise<string> {
 
   const uid = auth.currentUser.uid;
   const tokenRef = doc(db, "gmail_tokens", uid);
+  console.log("Firestore path UID:", uid);
   const snap = await getDoc(tokenRef);
 
   if (!snap.exists()) {
