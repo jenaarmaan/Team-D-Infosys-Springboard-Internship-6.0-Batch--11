@@ -35,6 +35,7 @@ export const withMiddleware = (
             // 1. Authenticate via Firebase ID Token
             const authHeader = req.headers.authorization;
             if (!authHeader?.startsWith('Bearer ')) {
+                console.warn("🚫 [MIDDLEWARE] Auth Header Missing");
                 return res.status(401).json({
                     success: false,
                     data: null,
@@ -44,11 +45,19 @@ export const withMiddleware = (
 
             const idToken = authHeader.split('Bearer ')[1];
             if (!idToken) {
+                console.warn("🚫 [MIDDLEWARE] ID Token Missing in Header");
                 return res.status(401).json({ success: false, data: null, error: { code: 'INVALID_TOKEN', message: 'Token missing' } });
             }
 
+            console.log("🔍 [MIDDLEWARE] Verifying ID Token...");
             const firebaseAuth = getAuth();
+            if (!firebaseAuth) {
+                console.error("❌ [MIDDLEWARE] Firebase Auth service is NULL");
+                throw new Error("AUTH_SERVICE_UNAVAILABLE");
+            }
+
             const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+            console.log("✅ [MIDDLEWARE] Token Verified. UID:", decodedToken.uid);
             const uid = decodedToken.uid;
 
             // 2. Prepare Authenticated Request Context

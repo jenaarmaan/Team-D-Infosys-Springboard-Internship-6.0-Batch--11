@@ -59,6 +59,8 @@ export const forceUnlockMic = () => {
 let lastErrorType = "";
 let lastErrorTime = 0;
 let lastStartTime = 0;
+let errorBackoffCount = 0;
+let currentRestartTimer: ReturnType<typeof setTimeout> | null = null;
 
 const safeStart = (source: string) => {
   if (!recognition) return;
@@ -85,6 +87,7 @@ const safeStart = (source: string) => {
   }
 
   try {
+    if (currentRestartTimer) clearTimeout(currentRestartTimer);
     recognition.start();
     lastStartTime = now;
     micState = "LISTENING";
@@ -95,6 +98,8 @@ const safeStart = (source: string) => {
     } else {
       console.warn(`[VOICE] ${source} start failed:`, err);
       micState = "IDLE";
+      // Increment backoff on hard start failure
+      errorBackoffCount++;
     }
     restartInProgress = false;
   }
@@ -114,6 +119,8 @@ export const initVoiceRecognition = (rec: any) => {
     micState = "LISTENING";
     restartInProgress = false;
     lastErrorType = ""; // Reset errors on success
+    errorBackoffCount = 0; // Reset backoff
+    if (currentRestartTimer) clearTimeout(currentRestartTimer);
   };
 
   recognition.onend = () => {
@@ -128,13 +135,19 @@ export const initVoiceRecognition = (rec: any) => {
       return;
     }
 
-    // 🚀 AUTO-RESTART with backoff
+    // 🚀 AUTO-RESTART with exponential backoff
     restartInProgress = true;
     resetDeadlockTimer();
 
-    const delay = lastErrorType === 'aborted' ? 2000 : 300;
+    // Calculate backoff: start at 300ms, increase on errors, max 10s
+    let delay = lastErrorType === 'aborted' ? 2000 : 300;
+    if (errorBackoffCount > 0) {
+      delay = Math.min(delay * Math.pow(1.5, errorBackoffCount), 10000);
+      console.log(`[VOICE] Backing off restart (count: ${errorBackoffCount}, delay: ${Math.round(delay)}ms)`);
+    }
 
-    setTimeout(() => {
+    if (currentRestartTimer) clearTimeout(currentRestartTimer);
+    currentRestartTimer = setTimeout(() => {
       restartInProgress = false;
       safeStart("auto-restart");
     }, delay);
@@ -144,6 +157,9 @@ export const initVoiceRecognition = (rec: any) => {
     lastErrorType = event.error;
     lastErrorTime = Date.now();
     console.error("[VOICE] Mic error:", event.error, event.message);
+
+    // Track sequential errors for backoff
+    errorBackoffCount++;
 
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       pauseListening("ERROR");

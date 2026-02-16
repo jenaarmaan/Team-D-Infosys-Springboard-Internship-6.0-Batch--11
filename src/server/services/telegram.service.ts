@@ -11,10 +11,7 @@ export class TelegramService {
 
     constructor() {
         if (!this.botToken) {
-            console.error("MISSING ENV VARIABLE: TELEGRAM_BOT_TOKEN");
-            if (process.env.NODE_ENV === 'production') {
-                throw new Error("CRITICAL: TELEGRAM_BOT_TOKEN is undefined.");
-            }
+            console.warn("⚠️ [TELEGRAM SERVICE] TELEGRAM_BOT_TOKEN is missing. Outgoing and incoming Telegram messages will fail.");
         }
     }
 
