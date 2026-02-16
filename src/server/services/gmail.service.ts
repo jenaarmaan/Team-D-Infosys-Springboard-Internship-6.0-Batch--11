@@ -1,7 +1,13 @@
 import { logger } from '../lib/logger';
 
+/**
+ * Enterprise Gmail Service
+ * Optimized for Vercel Serverless (high-latency regions like bom1)
+ * Uses native fetch with abort signals to prevent Lambda hangs.
+ */
 class GmailService {
     private GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+    private DEFAULT_TIMEOUT = 8000; // 8 seconds
 
     /**
      * Helper to get fetch headers with user token
@@ -13,11 +19,19 @@ class GmailService {
         };
     }
 
+    /**
+     * Create a timeout signal
+     */
+    private getTimeoutSignal(ms: number = this.DEFAULT_TIMEOUT) {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), ms);
+        return controller.signal;
+    }
+
     async listEmails(token: string, options: { limit?: number; unread?: boolean; q?: string } = {}) {
         try {
             const { limit = 50, unread = false, q } = options;
 
-            // Build the query
             const queryParts = [];
             if (unread) queryParts.push('is:unread');
             if (q) queryParts.push(q);
@@ -29,9 +43,13 @@ class GmailService {
                 url += '&labelIds=INBOX';
             }
 
-            logger.info('Gmail List Request', { url });
+            console.log(`📧 [GMAIL] List - Timeout: ${this.DEFAULT_TIMEOUT}ms, URL: ${url}`);
 
-            const response = await fetch(url, { headers: this.getHeaders(token) });
+            const response = await fetch(url, {
+                headers: this.getHeaders(token),
+                signal: this.getTimeoutSignal()
+            });
+
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Gmail API List Error: ${response.status} - ${errorText}`);
@@ -40,14 +58,14 @@ class GmailService {
             const data = await response.json();
             const messages = data.messages || [];
 
-            // Detailed fetch for each
-            // Reduced to 2 for extreme safety in cold-start serverless context
+            // Reduced to 2 for extreme safety in cold-start serverless context (bom1 latency)
             console.log(`📧 [GMAIL SERVICE] Fetching details for ${messages.length} messages (limiting to 2)...`);
             const emails = await Promise.all(
                 messages.slice(0, 2).map(async (msg: any) => {
                     try {
                         const detailRes = await fetch(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, {
-                            headers: this.getHeaders(token)
+                            headers: this.getHeaders(token),
+                            signal: this.getTimeoutSignal(5000) // 5s for parallel metadata
                         });
                         if (!detailRes.ok) return null;
 
@@ -68,7 +86,7 @@ class GmailService {
                             isUnread: detail.labelIds?.includes('UNREAD')
                         };
                     } catch (e: any) {
-                        logger.warn(`Failed to fetch metadata for message ${msg.id}`, { error: e.message });
+                        console.warn(`⚠️ [GMAIL] Detail fetch failed for ${msg.id}: ${e.message}`);
                         return null;
                     }
                 })
@@ -76,6 +94,10 @@ class GmailService {
 
             return emails.filter(Boolean);
         } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error("🛑 [GMAIL] Request timed out (Network Latency too high in region)");
+                throw new Error("GMAIL_TIMEOUT");
+            }
             logger.error('Gmail list failed', error);
             throw error;
         }
@@ -84,7 +106,8 @@ class GmailService {
     async getEmail(token: string, messageId: string) {
         try {
             const response = await fetch(`${this.GMAIL_API_BASE}/messages/${messageId}?format=full`, {
-                headers: this.getHeaders(token)
+                headers: this.getHeaders(token),
+                signal: this.getTimeoutSignal()
             });
             if (!response.ok) {
                 const errorText = await response.text();
@@ -106,6 +129,7 @@ class GmailService {
                 body: this.extractBody(payload)
             };
         } catch (error: any) {
+            if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail get failed', error);
             throw error;
         }
@@ -130,7 +154,8 @@ class GmailService {
             const response = await fetch(`${this.GMAIL_API_BASE}/messages/send`, {
                 method: 'POST',
                 headers: this.getHeaders(token),
-                body: JSON.stringify({ raw: encodedMessage })
+                body: JSON.stringify({ raw: encodedMessage }),
+                signal: this.getTimeoutSignal(10000) // 10s for send
             });
 
             if (!response.ok) {
@@ -140,6 +165,7 @@ class GmailService {
 
             return await response.json();
         } catch (error: any) {
+            if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail send failed', error);
             throw error;
         }
@@ -169,7 +195,8 @@ class GmailService {
                 body: JSON.stringify({
                     raw: encodedMessage,
                     threadId
-                })
+                }),
+                signal: this.getTimeoutSignal(10000)
             });
 
             if (!response.ok) {
@@ -179,6 +206,7 @@ class GmailService {
 
             return await response.json();
         } catch (error: any) {
+            if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail reply failed', error);
             throw error;
         }
@@ -191,7 +219,8 @@ class GmailService {
                 headers: this.getHeaders(token),
                 body: JSON.stringify({
                     removeLabelIds: ['UNREAD']
-                })
+                }),
+                signal: this.getTimeoutSignal(5000)
             });
 
             if (!response.ok) {
@@ -201,6 +230,7 @@ class GmailService {
 
             return { success: true };
         } catch (error: any) {
+            if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail markRead failed', error);
             throw error;
         }

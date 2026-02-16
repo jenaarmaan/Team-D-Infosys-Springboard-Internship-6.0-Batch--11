@@ -15,6 +15,7 @@ import {
   initVoiceRecognition,
   startListening,
   stopListening,
+  setVoiceReinitCallback,
 } from "@/lib/govind/voiceStateController";
 import { initPlatforms } from "@/lib/platforms/init";
 import { bindVoiceLifecycle } from "@/lib/govind/voiceLifecycle";
@@ -70,7 +71,7 @@ const VoiceBootstrap = () => {
     stateRef.current = state;
   }, [state]);
 
-  useEffect(() => {
+  const init = () => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -79,6 +80,7 @@ const VoiceBootstrap = () => {
       return;
     }
 
+    console.log("[VOICE] Creating fresh SpeechRecognition instance...");
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = true;
@@ -101,7 +103,11 @@ const VoiceBootstrap = () => {
       },
       () => wakeWordSensitivity
     );
+  };
 
+  useEffect(() => {
+    init();
+    setVoiceReinitCallback(init);
     console.log("[VOICE] Ready — waiting for user gesture");
   }, []);
 

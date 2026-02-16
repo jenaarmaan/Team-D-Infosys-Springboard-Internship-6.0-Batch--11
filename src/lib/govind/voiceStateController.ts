@@ -26,6 +26,12 @@ const pauseReasons = new Set<PauseReason>();
 let pausedByTTS = false;
 let restartInProgress = false;
 
+// 🔄 Re-initialization Hook
+let reinitCallback: (() => void) | null = null;
+export const setVoiceReinitCallback = (cb: () => void) => {
+  reinitCallback = cb;
+};
+
 // Deadlock prevention
 const DEADLOCK_TIMEOUT_MS = 10000;
 let deadlockTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,15 +80,15 @@ const safeStart = (source: string) => {
 
   const now = Date.now();
   // Prevent rapid-fire starts (min 500ms apart)
-  if (now - lastStartTime < 500) {
+  if (now - lastStartTime < 800) {
     return;
   }
 
-  // If we just had an 'aborted' error, wait longer
-  if (lastErrorType === 'aborted' && now - lastErrorTime < 2000) {
+  // If we just had an 'aborted' error, wait significantly longer
+  if (lastErrorType === 'aborted' && now - lastErrorTime < 3000) {
     console.log(`[VOICE] ${source} — backing off (abort cooling)`);
-    // 🔥 Schedule a retry to ensure the mic eventually turns on
-    setTimeout(() => safeStart(`${source}-retry`), 1500);
+    if (currentRestartTimer) clearTimeout(currentRestartTimer);
+    currentRestartTimer = setTimeout(() => safeStart(`${source}-retry`), 2000);
     return;
   }
 
@@ -94,11 +100,11 @@ const safeStart = (source: string) => {
     console.log(`[VOICE] Mic opened (${source})`);
   } catch (err: any) {
     if (err.name === 'InvalidStateError') {
+      console.log("[VOICE] Attempted start in InvalidState — aligning state to LISTENING");
       micState = "LISTENING";
     } else {
       console.warn(`[VOICE] ${source} start failed:`, err);
       micState = "IDLE";
-      // Increment backoff on hard start failure
       errorBackoffCount++;
     }
     restartInProgress = false;
@@ -106,19 +112,20 @@ const safeStart = (source: string) => {
 };
 
 export const initVoiceRecognition = (rec: any) => {
-  if (recognition) {
-    console.warn("[VOICE] Recognition already initialized — ignored");
-    return;
+  // Clear previous instance if any (Hard Kill)
+  if (recognition && recognition !== rec) {
+    console.log("[VOICE] Swapping recognition object — stopping old one");
+    try { recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch (e) { }
   }
 
   recognition = rec;
   micState = "IDLE";
-  pauseReasons.clear();
+  // We dont clear pauseReasons here to preserve state across re-inits
 
   recognition.onstart = () => {
     micState = "LISTENING";
     restartInProgress = false;
-    lastErrorType = ""; // Reset errors on success
+    lastErrorType = "";
 
     // 🔥 Stability Window: Only reset backoff if it stays healthy for 5 seconds
     setTimeout(() => {
@@ -134,7 +141,6 @@ export const initVoiceRecognition = (rec: any) => {
   recognition.onend = () => {
     console.log("[VOICE] onend received. State:", micState, "Reasons:", Array.from(pauseReasons));
 
-    // If we're here, the session is definitely closed
     if (micState !== "PAUSED_BY_REASON") {
       micState = "IDLE";
     }
@@ -147,10 +153,10 @@ export const initVoiceRecognition = (rec: any) => {
     restartInProgress = true;
     resetDeadlockTimer();
 
-    // Calculate backoff: start at 300ms, increase on errors, max 10s
-    let delay = lastErrorType === 'aborted' ? 2000 : 300;
+    // Calculate backoff: start at 500ms, increase on errors, max 12s
+    let delay = lastErrorType === 'aborted' ? 2500 : 500;
     if (errorBackoffCount > 0) {
-      delay = Math.min(delay * Math.pow(1.5, errorBackoffCount), 10000);
+      delay = Math.min(delay * Math.pow(1.6, errorBackoffCount), 12000);
       console.log(`[VOICE] Backing off restart (count: ${errorBackoffCount}, delay: ${Math.round(delay)}ms)`);
     }
 
@@ -166,8 +172,16 @@ export const initVoiceRecognition = (rec: any) => {
     lastErrorTime = Date.now();
     console.error("[VOICE] Mic error:", event.error, event.message);
 
-    // Track sequential errors for backoff
     errorBackoffCount++;
+
+    // 💣 RE-INITIALIZATION TRIGGER
+    // If we hit 4 aborted errors in a row, the browser object is likely wedged.
+    if (errorBackoffCount >= 4 && reinitCallback) {
+      console.warn("[VOICE] 4 consecutive errors — Triggering Total Re-initialization");
+      reinitCallback();
+      errorBackoffCount = 0; // Reset to avoid loop
+      return;
+    }
 
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       pauseListening("ERROR");
