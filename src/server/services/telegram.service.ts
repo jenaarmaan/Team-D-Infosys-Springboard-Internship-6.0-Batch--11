@@ -1,4 +1,4 @@
-import { db } from '../lib/clients/firebase.admin';
+import { getDb } from '../lib/clients/firebase.admin';
 import { logger } from '../lib/logger';
 import axios from 'axios';
 
@@ -48,6 +48,7 @@ export class TelegramService {
     async processWebhookUpdate(update: any): Promise<void> {
         const updateId = update.update_id;
         if (!updateId) return;
+        const db = getDb();
         if (!db) {
             logger.error('Firebase DB not initialized in TelegramService', new Error('DB_NULL'));
             return;
@@ -73,7 +74,7 @@ export class TelegramService {
             console.log("WRITING TO TELEGRAM PATH:", fullPath);
             logger.info('TELEGRAM FIRESTORE FULL PATH (WRITE):', { path: fullPath });
 
-            const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
+            const docRef = getDb().collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
 
             // Idempotency Check: Transactional write to ensure we only process once
             const doc = await docRef.get();
@@ -105,6 +106,7 @@ export class TelegramService {
      * Fetch recent updates for a user from Firestore
      */
     async getUpdates(uid: string, limit: number = 50): Promise<any[]> {
+        const db = getDb();
         if (!db) return [];
         try {
             const snapshot = await db.collection('telegram_updates')
@@ -129,6 +131,7 @@ export class TelegramService {
      * Looks up user profile in Firestore
      */
     private async resolveUidForChat(chatId: number): Promise<string | null> {
+        const db = getDb();
         if (!db) return null;
         try {
             // Search 'users' collection for the telegramChatId field

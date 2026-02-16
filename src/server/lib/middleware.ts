@@ -54,7 +54,7 @@ export const withMiddleware = (
             }
 
             // 3. Execute Core Handler
-            logger.info('API request started', { endpoint: req.url, uid, requestId });
+            console.log(`🚀 [API] Executing ${req.url}`, { uid, requestId });
             await handler(authReq, res);
 
             const duration = Date.now() - startTime;
@@ -62,21 +62,27 @@ export const withMiddleware = (
 
         } catch (error: any) {
             const duration = Date.now() - startTime;
+            console.error("🛑 [MIDDLEWARE ERROR]", {
+                message: error.message,
+                stack: error.stack,
+                requestId,
+                endpoint: req.url
+            });
             logger.error('API request failed', error, { endpoint: req.url, requestId, duration });
 
             // Unified Error Response
             const statusCode = error.status || 500;
-            return res.status(statusCode).json({
-                success: false,
-                data: null,
-                error: {
-                    code: error.code || 'INTERNAL_SERVER_ERROR',
-                    message: process.env.NODE_ENV === 'production'
-                        ? 'An unexpected error occurred. Please try again later.'
-                        : error.message,
-                    details: process.env.NODE_ENV === 'development' ? error.details : undefined
-                }
-            });
+            if (!res.writableEnded) {
+                return res.status(statusCode).json({
+                    success: false,
+                    data: null,
+                    error: {
+                        code: error.code || 'INTERNAL_SERVER_ERROR',
+                        message: error.message || 'An unexpected error occurred.',
+                        details: error.details
+                    }
+                });
+            }
         }
     };
 };
