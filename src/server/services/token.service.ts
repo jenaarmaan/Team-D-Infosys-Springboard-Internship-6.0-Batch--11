@@ -11,8 +11,8 @@ export interface GmailToken {
 }
 
 export class TokenService {
-    private clientId = process.env.GOOGLE_CLIENT_ID;
-    private clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    private clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+    private clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET;
 
     constructor() {
         if (!this.clientId) {

@@ -10,21 +10,30 @@ export function getFirebaseAdmin() {
     }
 
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKey) {
-        console.error("MISSING ENV VARIABLE: FIREBASE_SERVICE_ACCOUNT_KEY");
-        throw new Error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is undefined.");
-    }
-    const serviceAccount = JSON.parse(serviceAccountKey);
 
-    if (!serviceAccount.project_id) {
-        console.warn('[FIREBASE ADMIN] Initializing without Service Account (IAM/Default credentials)');
-        return admin.initializeApp();
+    if (serviceAccountKey) {
+        try {
+            const serviceAccount = JSON.parse(serviceAccountKey);
+            return admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+                databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+            });
+        } catch (err) {
+            console.error("❌ FAILED TO PARSE FIREBASE_SERVICE_ACCOUNT_KEY JSON");
+        }
     }
 
-    return admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-    });
+    // Fallback: Individual Env Variables
+    const projectId = process.env.projectId || process.env.VITE_FIREBASE_PROJECT_ID;
+    if (projectId) {
+        console.warn('[FIREBASE ADMIN] Initializing with Project ID - Service Account Key Recommended');
+        return admin.initializeApp({
+            projectId: projectId
+        });
+    }
+
+    console.error("MISSING ENV VARIABLE: FIREBASE_SERVICE_ACCOUNT_KEY or projectId");
+    throw new Error("CRITICAL: Firebase Admin configuration is missing.");
 }
 
 export const db = admin.apps.length > 0 ? getFirebaseAdmin().firestore() : null;

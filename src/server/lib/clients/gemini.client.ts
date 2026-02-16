@@ -8,9 +8,9 @@ let genAI: GoogleGenerativeAI | null = null;
 export function getGeminiClient() {
     if (genAI) return genAI;
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.apiKey;
     if (!apiKey) {
-        throw new Error('GEMINI_API_KEY is missing from environment');
+        throw new Error('GEMINI_API_KEY (or apiKey) is missing from environment');
     }
 
     genAI = new GoogleGenerativeAI(apiKey);

@@ -36,9 +36,13 @@ async function webhookHandler(req: VercelRequest, res: VercelResponse) {
     const secretToken = req.headers['x-telegram-bot-api-secret-token'];
     const expectedToken = process.env.TELEGRAM_WEBHOOK_SECRET;
 
-    if (!expectedToken || secretToken !== expectedToken) {
+    if (expectedToken && secretToken !== expectedToken) {
         logger.warn('Unauthorized Telegram Webhook attempt', { senderIp: req.headers['x-forwarded-for'] });
         return res.status(401).send('Unauthorized');
+    }
+
+    if (!expectedToken) {
+        logger.warn('Telegram Webhook running without TELEGRAM_WEBHOOK_SECRET - Production risk');
     }
 
     try {
