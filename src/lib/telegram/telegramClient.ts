@@ -149,6 +149,16 @@ export class TelegramClient {
   isConnectedStatus(): boolean {
     return this.isConnected;
   }
+
+  /**
+   * Helper to get the most recent active chat ID as fallback
+   */
+  getDefaultChatId(): number | null {
+    if (this.activeChatId) return this.activeChatId;
+    const chats = Array.from(this.internalChats.values());
+    if (chats.length > 0) return chats[0].id;
+    return null;
+  }
 }
 
 // Singleton instance

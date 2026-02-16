@@ -17,8 +17,16 @@ export const withMiddleware = (
     options: { requiredRole?: string } = {}
 ) => {
     return async (req: VercelRequest, res: VercelResponse) => {
-        const requestId = (req.headers['x-request-id'] as string) || `req-${Math.random().toString(36).substring(7)}`;
+        const requestId = (req.headers['x-request-id'] as string) || crypto.randomUUID();
         const startTime = Date.now();
+
+        // 🩺 DEBUG: ENV CHECK (Masked)
+        console.log("🛠️ [ENV DIAGNOSTIC]", {
+            FIREBASE_SA: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+            G_CLIENT: !!(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID),
+            G_SECRET: !!(process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET),
+            TG_BOT: !!process.env.TELEGRAM_BOT_TOKEN
+        });
 
         try {
             console.log(`🔌 [MIDDLEWARE] New Request: ${req.method} ${req.url}`);
@@ -81,7 +89,15 @@ export const withMiddleware = (
             if (!res.writableEnded) {
                 return res.status(statusCode).json({
                     success: false,
-                    data: null,
+                    data: {
+                        status: "error", // Changed from "ok" as this is an error response
+                        timestamp: new Date().toISOString(),
+                        env: {
+                            hasFirebaseSA: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+                            hasGemini: !!(process.env.GEMINI_API_KEY || process.env.apiKey),
+                            hasTelegram: !!process.env.TELEGRAM_BOT_TOKEN
+                        }
+                    },
                     error: {
                         code: error.code || 'INTERNAL_SERVER_ERROR',
                         message: error.message || 'An unexpected error occurred.',

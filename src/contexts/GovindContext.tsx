@@ -110,6 +110,8 @@ interface GovindContextType {
   setRouteIntent: (s: string | null) => void;
 
   faceImageUrl: string | null;
+  sleep: () => void;
+  clearMessages: () => void;
 }
 
 
@@ -245,15 +247,18 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     if (!settings.continuousListening) {
       stopListening();
     } else {
-      pauseListening("GLOBAL_EXIT");  // 🔥 Stage-1: kill mic + pause reasons
+      pauseListening("GLOBAL_EXIT");
     }
     setAuthMode(null);
     setAuthStep("IDLE");
     setVoiceMode("GLOBAL");
-    setState("SLEEPING");
+    setState("DORMANT");
     setIsAssistantOpen(false);
     isAwakeRef.current = false;
   };
+
+  const sleep = () => resetSystem();
+  const clearMessages = () => setMessages([]);
 
 
   // ======================================================
@@ -1225,6 +1230,8 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
         setRouteIntent,
 
         faceImageUrl,
+        sleep,
+        clearMessages,
       }}
     >
 
