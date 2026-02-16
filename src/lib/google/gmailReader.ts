@@ -8,13 +8,19 @@ export async function fetchInbox(limit = 50) {
   console.log("[GMAIL] Fetching inbox via proxy (limit: " + limit + ")");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.get<any[]>(`/api/v1/gmail?action=list&limit=${limit}`, { googleToken: token });
+  const result = await apiClient.get<any>(`/api/v1/gmail?action=list&limit=${limit}`, { googleToken: token });
 
-  if (!result.success) {
-    throw new Error(result.error?.message || "Failed to fetch Gmail inbox");
+  console.log("[GMAIL] RAW RESPONSE:", result);
+
+  const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
+  if (!Array.isArray(messages)) {
+    console.warn("[GMAIL] Unexpected response shape:", result);
   }
 
-  return result.data.map((email: any) => ({
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  console.log("[GMAIL] messages array length:", safeMessages.length);
+
+  return safeMessages.map((email: any) => ({
     ...email,
     date: new Date(email.date)
   }));
@@ -25,13 +31,15 @@ export async function fetchInbox(limit = 50) {
  */
 export async function fetchUnreadInbox(limit = 10) {
   const token = await getValidAccessToken();
-  const result = await apiClient.get<any[]>(`/api/v1/gmail?action=list&unread=true&limit=${limit}`, { googleToken: token });
+  const result = await apiClient.get<any>(`/api/v1/gmail?action=list&unread=true&limit=${limit}`, { googleToken: token });
 
-  if (!result.success) {
-    return [];
-  }
+  console.log("[GMAIL][UNREAD] RAW RESPONSE:", result);
 
-  return result.data.map((email: any) => ({
+  const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  console.log("[GMAIL][UNREAD] messages array length:", safeMessages.length);
+
+  return safeMessages.map((email: any) => ({
     ...email,
     date: new Date(email.date)
   }));
@@ -44,13 +52,20 @@ export async function readEmail(messageId: string) {
   const token = await getValidAccessToken();
   const result = await apiClient.get<any>(`/api/v1/gmail?action=get&id=${messageId}`, { googleToken: token });
 
-  if (!result.success) {
-    throw new Error(result.error?.message || "Failed to read email");
+  console.log("[GMAIL][GET] RAW RESPONSE:", result);
+
+  const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
+  const emailData = safeMessages.length > 0 ? safeMessages[0] : ((result as any)?.data?.email ?? (result as any)?.data);
+
+  if (!emailData || typeof emailData !== 'object') {
+    throw new Error("Failed to parse email content");
   }
 
   return {
-    ...result.data,
-    date: new Date(result.data.date)
+    ...emailData,
+    date: new Date(emailData.date)
   };
 }
 

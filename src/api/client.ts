@@ -60,7 +60,16 @@ class ApiClient {
                 }
             }
 
+            // [FIX] Validate JSON content type before parsing (Step 3)
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await response.text();
+                console.error("[API] Expected JSON but received:", contentType, text.slice(0, 100));
+                throw new Error("Server did not return JSON. Possible 404 or redirect.");
+            }
+
             const data = await response.json();
+            console.log(`[API] RAW RESPONSE [${endpoint}]:`, data);
 
             // Ensure unified format even if backend fails to provide it
             if (!response.ok) {

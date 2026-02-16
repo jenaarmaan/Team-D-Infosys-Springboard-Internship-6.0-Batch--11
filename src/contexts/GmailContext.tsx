@@ -301,19 +301,27 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       else if (currentSection === "inbox") query = "in:inbox";
 
       // 2. Fetch via Secure Proxy
-      const result = await apiClient.get<any[]>(
+      const result = await apiClient.get<any>(
         `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
+
+      console.log("[GMAIL][OAUTH] RAW RESPONSE:", result);
 
       if (!result.success) {
         throw new Error(result.error?.message || "FETCH_FAILED");
       }
 
-      const emails = result.data;
+      const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
+      if (!Array.isArray(messages)) {
+        console.warn("[GMAIL][OAUTH] Unexpected response shape:", result);
+      }
+
+      const safeMessages = Array.isArray(messages) ? messages : [];
+      console.log("[GMAIL][OAUTH] messages array length:", safeMessages.length);
 
       // Sync to state
-      setInboxEmails(emails.map((email: any) => ({
+      setInboxEmails(safeMessages.map((email: any) => ({
         ...email,
         date: new Date(email.date)
       })));

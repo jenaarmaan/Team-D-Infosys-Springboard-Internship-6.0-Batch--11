@@ -4,6 +4,7 @@ import * as admin from 'firebase-admin';
  * Cold-Start Optimized Firebase Admin Singleton
  */
 export function getFirebaseAdmin() {
+    console.log("🔥 FIREBASE ADMIN INIT ATTEMPT");
     if (admin.apps.length > 0) {
         return admin.apps[0]!;
     }
