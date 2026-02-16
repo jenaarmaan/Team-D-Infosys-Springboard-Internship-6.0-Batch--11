@@ -21,6 +21,8 @@ export const withMiddleware = (
         const startTime = Date.now();
 
         try {
+            console.log(`🔌 [MIDDLEWARE] New Request: ${req.method} ${req.url}`);
+
             // 1. Authenticate via Firebase ID Token
             const authHeader = req.headers.authorization;
             if (!authHeader?.startsWith('Bearer ')) {
@@ -32,8 +34,12 @@ export const withMiddleware = (
             }
 
             const idToken = authHeader.split('Bearer ')[1];
+            if (!idToken) {
+                return res.status(401).json({ success: false, data: null, error: { code: 'INVALID_TOKEN', message: 'Token missing' } });
+            }
+
             const firebaseAuth = getAuth();
-            const decodedToken = await firebaseAuth.verifyIdToken(idToken!);
+            const decodedToken = await firebaseAuth.verifyIdToken(idToken);
             const uid = decodedToken.uid;
 
             // 2. Prepare Authenticated Request Context
@@ -41,11 +47,11 @@ export const withMiddleware = (
             authReq.uid = uid;
             authReq.requestId = requestId;
 
-            // RBAC Placeholder: In production, fetch role from claims or Firestore
+            // RBAC Placeholder
             authReq.userRole = (decodedToken.role as string) || 'user';
 
             if (options.requiredRole && authReq.userRole !== options.requiredRole) {
-                logger.warn('Access denied: insufficient privileges', { uid, requestId, required: options.requiredRole });
+                console.warn(`🚫 [AUTH] Access denied for ${uid}: Required role ${options.requiredRole}`);
                 return res.status(403).json({
                     success: false,
                     data: null,

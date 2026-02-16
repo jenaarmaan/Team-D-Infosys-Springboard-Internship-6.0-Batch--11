@@ -11,6 +11,7 @@ import { logger } from '../src/server/lib/logger';
  * ENFORCED JSON CONTRACT: Always returns JSON with { success, data: { messages }, error }
  */
 export default withMiddleware(async (req: AuthenticatedRequest, res: VercelResponse) => {
+    console.log(`📨 [GMAIL API] Action: ${req.query.action}, UID: ${req.uid}`);
     // Step 1: Enforce JSON response
     res.setHeader("Content-Type", "application/json");
 

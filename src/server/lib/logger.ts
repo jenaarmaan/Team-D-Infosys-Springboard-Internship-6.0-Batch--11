@@ -20,17 +20,24 @@ export const logger = {
         }));
     },
     error: (message: string, error: any, context: Record<string, any> = {}) => {
-        console.error(JSON.stringify({
-            level: 'error',
-            message,
-            timestamp: new Date().toISOString(),
-            error: {
-                message: error.message,
-                code: error.code || 'INTERNAL_ERROR',
-                // Stack trace omitted in production via NODE_ENV check if desired
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            },
-            ...context
-        }));
+        const errorDetail = {
+            message: error?.message || String(error),
+            code: error?.code || 'INTERNAL_ERROR',
+            stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+        };
+
+        console.error(`🛑 [ERROR] ${message}:`, errorDetail.message, context);
+
+        try {
+            console.error(JSON.stringify({
+                level: 'error',
+                message,
+                timestamp: new Date().toISOString(),
+                error: errorDetail,
+                ...context
+            }));
+        } catch (e) {
+            console.error("Critical: Logger failed to stringify error", message);
+        }
     }
 };

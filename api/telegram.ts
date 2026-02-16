@@ -60,9 +60,10 @@ async function webhookHandler(req: VercelRequest, res: VercelResponse) {
  * Consolidated Telegram API Handler
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    console.log("SERVER TELEGRAM CHECK:", {
-        hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
-    });
+    const { action } = req.query;
+    console.log(`🤖 [TELEGRAM API] Method: ${req.method}, Action: ${action || 'webhook'}`);
+
+    console.log("SERVER TELEGRAM CHECK:", { hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN });
 
     if (req.method !== 'POST') {
         return res.status(405).json({
@@ -70,8 +71,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST' }
         });
     }
-
-    const { action } = req.query;
 
     // Webhook doesn't have an 'action' query param usually, 
     // it's traditionally at /api/v1/telegram/webhook

@@ -10,10 +10,10 @@
         "types": [
             "node"
         ],
-        "baseUrl": "..",
+        "baseUrl": ".",
         "paths": {
             "@/*": [
-                "./voice-mail/src/*"
+                "../src/*"
             ]
         }
     },
