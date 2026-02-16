@@ -1,10 +1,10 @@
 import { getDb } from '../lib/clients/firebase.admin';
 import { logger } from '../lib/logger';
-import axios from 'axios';
 
 /**
  * Enterprise Telegram Service
  * Handles outgoing messages and idempotent incoming updates.
+ * Replaced 'axios' with native 'fetch' for Vercel Serverless stability.
  */
 export class TelegramService {
     private botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -24,14 +24,19 @@ export class TelegramService {
 
         try {
             const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
-            const response = await axios.post(url, { chat_id: chatId, text });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text })
+            });
 
-            if (!response.data.ok) {
-                throw new Error(response.data.description || 'Telegram API Error');
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error(data.description || 'Telegram API Error');
             }
 
             logger.info('Telegram message sent', { uid, requestId, chatId });
-            return response.data.result;
+            return data.result;
 
         } catch (error: any) {
             logger.error('Telegram send failed', error, { uid, requestId, chatId });
@@ -59,17 +64,12 @@ export class TelegramService {
             const chatId = message.chat.id;
 
             // 2. Resolve UID: Maps Telegram chatId to Firebase UID
-            // In production, this should lookup a mapping collection or user profile
             const uid = await this.resolveUidForChat(chatId);
 
             if (!uid) {
                 logger.warn('Incoming Telegram update ignored: No UID mapping found for chat', { chatId, updateId });
                 return;
             }
-
-            const fullPath = `telegram_updates/${uid}/updates/update_${updateId}`;
-            console.log("WRITING TO TELEGRAM PATH:", fullPath);
-            logger.info('TELEGRAM FIRESTORE FULL PATH (WRITE):', { path: fullPath });
 
             const docRef = getDb().collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
 
@@ -80,7 +80,7 @@ export class TelegramService {
                 return;
             }
 
-            // 3. Sink to Firestore (Authenticated by Bot Token on the endpoint)
+            // 3. Sink to Firestore
             await docRef.set({
                 processedAt: new Date().toISOString(),
                 chatId: message.chat.id,
@@ -88,7 +88,7 @@ export class TelegramService {
                 senderName: message.from.first_name,
                 text: message.text,
                 date: message.date,
-                uid: uid // Explicitly store UID for cross-ref
+                uid: uid
             });
 
             logger.info('Telegram update processed successfully', { updateId, uid, sender: message.from.first_name });
@@ -125,14 +125,11 @@ export class TelegramService {
 
     /**
      * Resolves Firebase UID from Telegram Chat ID
-     * Looks up user profile in Firestore
      */
     private async resolveUidForChat(chatId: number): Promise<string | null> {
         const db = getDb();
         if (!db) return null;
         try {
-            // Search 'users' collection for the telegramChatId field
-            // Note: This field must be set during the link/auth process
             const snapshot = await db.collection('users')
                 .where('connectedApps.telegram', '==', true)
                 .where('telegramChatId', '==', chatId)
@@ -140,7 +137,6 @@ export class TelegramService {
                 .get();
 
             if (snapshot.empty) {
-                // FALLBACK: For development, check for a "global" test user link if set
                 const globalLink = await db.collection('telegram_config').doc('mappings').get();
                 const mappings = globalLink.data() as Record<string, string>;
                 if (mappings && mappings[chatId.toString()]) {

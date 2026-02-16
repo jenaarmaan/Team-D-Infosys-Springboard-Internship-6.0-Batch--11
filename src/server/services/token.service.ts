@@ -1,6 +1,6 @@
 import { getDb } from '../lib/clients/firebase.admin';
 import { logger } from '../lib/logger';
-import axios from 'axios';
+import * as admin from 'firebase-admin';
 
 export interface GmailToken {
     accessToken: string;
@@ -15,10 +15,10 @@ export class TokenService {
     private clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET;
 
     constructor() {
-        if (!this.clientId) {
+        if (!process.env.GOOGLE_CLIENT_ID && !process.env.VITE_GOOGLE_CLIENT_ID) {
             console.warn("⚠️ [TOKEN SERVICE] GOOGLE_CLIENT_ID is missing. Gmail operations may fail.");
         }
-        if (!this.clientSecret) {
+        if (!process.env.GOOGLE_CLIENT_SECRET && !process.env.VITE_GOOGLE_CLIENT_SECRET) {
             console.warn("⚠️ [TOKEN SERVICE] GOOGLE_CLIENT_SECRET is missing. Refreshing tokens will fail.");
         }
     }
@@ -35,9 +35,12 @@ export class TokenService {
             throw new Error('DB_NOT_INITIALIZED');
         }
 
-        let doc;
+        let doc: admin.firestore.DocumentSnapshot;
         try {
-            doc = await db.collection('gmail_tokens').doc(uid).get();
+            // 🛑 5s Timeout for Firestore (avoid Lambda hang)
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), 5000));
+            const getPromise = db.collection('gmail_tokens').doc(uid).get();
+            doc = await Promise.race([getPromise, timeoutPromise]) as admin.firestore.DocumentSnapshot;
         } catch (err: any) {
             console.error("❌ [TOKEN] Firestore read failed:", err.message);
             throw new Error(`DB_READ_ERROR: ${err.message}`);
@@ -77,14 +80,26 @@ export class TokenService {
 
         try {
             logger.info('Refreshing Gmail token', { uid });
-            const response = await axios.post('https://oauth2.googleapis.com/token', {
-                client_id: this.clientId,
-                client_secret: this.clientSecret,
-                refresh_token: refreshToken,
-                grant_type: 'refresh_token'
+
+            const params = new URLSearchParams();
+            params.append('client_id', this.clientId as string);
+            params.append('client_secret', this.clientSecret as string);
+            params.append('refresh_token', refreshToken);
+            params.append('grant_type', 'refresh_token');
+
+            const response = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params
             });
 
-            const { access_token, expires_in } = response.data;
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Google API Error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            const { access_token, expires_in } = data;
             const expiresAt = Math.floor(Date.now() / 1000) + expires_in;
 
             // Update Firestore with new token

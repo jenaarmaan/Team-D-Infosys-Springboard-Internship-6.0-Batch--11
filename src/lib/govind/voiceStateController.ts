@@ -119,7 +119,15 @@ export const initVoiceRecognition = (rec: any) => {
     micState = "LISTENING";
     restartInProgress = false;
     lastErrorType = ""; // Reset errors on success
-    errorBackoffCount = 0; // Reset backoff
+
+    // 🔥 Stability Window: Only reset backoff if it stays healthy for 5 seconds
+    setTimeout(() => {
+      if (micState === "LISTENING") {
+        console.log("[VOICE] Stability target reached — resetting backoff count");
+        errorBackoffCount = 0;
+      }
+    }, 5000);
+
     if (currentRestartTimer) clearTimeout(currentRestartTimer);
   };
 
