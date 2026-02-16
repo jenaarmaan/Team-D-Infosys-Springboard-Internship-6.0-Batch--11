@@ -51,6 +51,8 @@ import { detectSensitiveData } from "@/privacy/detector";
 import { sanitize } from "@/privacy/sanitizer";
 import { routeToPlatform } from "@/lib/platforms/platformRouter";
 import { getTelegramClient } from "@/lib/telegram/telegramClient";
+import { callGeminiSecurely } from "@/lib/ai/gemini";
+import { federatedPrivacy } from "@/privacy/federated";
 
 
 
@@ -675,7 +677,6 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     `;
 
     try {
-      const { callGeminiSecurely } = await import("@/lib/ai/gemini");
       const { response: aiSummary, privacy } = await callGeminiSecurely(prompt);
 
       if (privacy.entities.length > 0) {
@@ -801,10 +802,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           telegram.updateDraft(processingText);
 
           if (privacyInfo.length > 0) {
-            (async () => {
-              const { federatedPrivacy } = await import("@/privacy/federated");
-              privacyInfo.forEach(type => federatedPrivacy.recordFeedback({ entityType: type, originalValue: "DIRECT_PROMPT", isCorrect: true }));
-            })();
+            privacyInfo.forEach(type => federatedPrivacy.recordFeedback({ entityType: type, originalValue: "DIRECT_PROMPT", isCorrect: true }));
           }
 
           setComposeStep("CONFIRM_DRAFT");

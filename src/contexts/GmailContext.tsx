@@ -111,7 +111,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       setLoading(true);
-      const emails = await fetchInbox(50);
+      const emails = await fetchInbox(5); // Reduced from 50 for Vercel stability
       setInboxEmails(emails);
     } catch (err: any) {
       setError(err.message || "Failed to fetch inbox");
@@ -302,7 +302,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
 
       // 2. Fetch via Secure Proxy
       const result = await apiClient.get<any>(
-        `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
+        `/api/v1/gmail?action=list&limit=5&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
 

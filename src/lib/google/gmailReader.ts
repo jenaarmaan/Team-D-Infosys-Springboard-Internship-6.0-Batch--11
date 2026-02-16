@@ -4,7 +4,7 @@ import { getValidAccessToken } from "./gmailClient";
 /**
  * Fetch latest inbox emails via secure proxy
  */
-export async function fetchInbox(limit = 50) {
+export async function fetchInbox(limit = 5) {
   console.log("[GMAIL] Fetching inbox via proxy (limit: " + limit + ")");
   const token = await getValidAccessToken();
 

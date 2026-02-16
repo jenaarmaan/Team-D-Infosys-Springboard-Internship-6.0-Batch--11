@@ -10,6 +10,8 @@ export interface PendingAction {
     data: any;
 }
 
+import { getTelegramClient } from "@/lib/telegram/telegramClient";
+
 class MessagingPlatformService {
     private activePlatform: TargetPlatform | null = null;
     private pendingAction: PendingAction | null = null;
@@ -22,7 +24,6 @@ class MessagingPlatformService {
     async initialize(): Promise<{ telegram: boolean }> {
         let telegramReady = false;
         try {
-            const { getTelegramClient } = await import("@/lib/telegram/telegramClient");
             const client = getTelegramClient();
             await client.connect();
             telegramReady = true;
