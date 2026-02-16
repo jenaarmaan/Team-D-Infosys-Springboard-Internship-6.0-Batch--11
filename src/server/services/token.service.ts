@@ -16,12 +16,10 @@ export class TokenService {
 
     constructor() {
         if (!this.clientId) {
-            console.error("MISSING ENV VARIABLE: GOOGLE_CLIENT_ID");
-            throw new Error("CRITICAL: GOOGLE_CLIENT_ID is undefined.");
+            console.warn("⚠️ [TOKEN SERVICE] GOOGLE_CLIENT_ID is missing. Gmail operations may fail.");
         }
         if (!this.clientSecret) {
-            console.error("MISSING ENV VARIABLE: GOOGLE_CLIENT_SECRET");
-            throw new Error("CRITICAL: GOOGLE_CLIENT_SECRET is undefined.");
+            console.warn("⚠️ [TOKEN SERVICE] GOOGLE_CLIENT_SECRET is missing. Refreshing tokens will fail.");
         }
     }
 
