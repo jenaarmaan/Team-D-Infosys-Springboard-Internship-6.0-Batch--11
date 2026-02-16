@@ -2,7 +2,6 @@ import { VercelResponse } from '@vercel/node';
 import { withMiddleware, AuthenticatedRequest } from '../src/server/lib/middleware';
 import { gmailService } from '../src/server/services/gmail.service';
 import { tokenService } from '../src/server/services/token.service';
-import { validator } from '../src/server/lib/validator';
 import { logger } from '../src/server/lib/logger';
 
 /**
@@ -12,6 +11,7 @@ import { logger } from '../src/server/lib/logger';
  */
 export default withMiddleware(async (req: AuthenticatedRequest, res: VercelResponse) => {
     console.log(`📨 [GMAIL API] Action: ${req.query.action}, UID: ${req.uid}`);
+
     // Step 1: Enforce JSON response
     res.setHeader("Content-Type", "application/json");
 
@@ -19,25 +19,29 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
     const uid = req.uid;
 
     try {
-        // 1. Securely retrieve/refresh token from Firestore
+        console.log(`🔑 [GMAIL API] Fetching token for UID: ${uid}`);
         const accessToken = await tokenService.getValidToken(uid);
+        console.log(`✅ [GMAIL API] Token acquired. Action: ${action}`);
 
         switch (action) {
             case 'list': {
                 const { limit, unread, query } = req.query;
+                console.log(`📧 [GMAIL API] Listing emails (Requested: ${limit || 'default'}, Unread: ${unread}, Query: ${query || 'none'})`);
+
                 const emails = await gmailService.listEmails(accessToken, {
-                    limit: limit ? parseInt(limit as string) : 50,
+                    limit: limit ? parseInt(limit as string) : 3, // Very low limit for cold starts
                     unread: unread === 'true',
                     q: query as string
                 });
 
-                // Uniform Success Response (Step 1 & 2 hybrid for compatibility)
+                console.log(`📧 [GMAIL API] Found ${emails ? emails.length : 0} emails.`);
+
                 return res.status(200).json({
                     success: true,
                     data: {
                         messages: emails || []
                     },
-                    messages: emails || [], // Top-level failsafe for Step 1
+                    messages: emails || [],
                     error: null
                 });
             }
@@ -45,13 +49,16 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
             case 'get': {
                 const { id } = req.query;
                 if (!id) throw new Error('Email ID missing');
+
+                console.log(`📧 [GMAIL API] Getting email with ID: ${id}`);
                 const email = await gmailService.getEmail(accessToken, id as string);
+
                 return res.status(200).json({
                     success: true,
                     data: {
                         messages: email ? [email] : []
                     },
-                    messages: email ? [email] : [], // Top-level failsafe for Step 1
+                    messages: email ? [email] : [],
                     error: null
                 });
             }
@@ -59,7 +66,10 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
             case 'mark-read': {
                 const { messageId } = req.body;
                 if (!messageId) throw new Error('Message ID missing');
+
+                console.log(`📧 [GMAIL API] Marking message ${messageId} as read.`);
                 await gmailService.markAsRead(accessToken, messageId);
+
                 return res.status(200).json({
                     success: true,
                     data: { messages: [] },
@@ -69,6 +79,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
             }
 
             default:
+                console.warn(`📧 [GMAIL API] Unsupported action: ${action}`);
                 return res.status(400).json({
                     success: false,
                     data: { messages: [] },
@@ -80,7 +91,6 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
         console.error("GMAIL SERVER ERROR:", error);
         logger.error("GMAIL_API_FATAL", error, { uid, action });
 
-        // Enforced Error Contract (Step 1)
         return res.status(error.status || 500).json({
             success: false,
             data: { messages: [] },

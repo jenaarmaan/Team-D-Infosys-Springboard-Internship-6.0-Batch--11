@@ -1,6 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAuth } from './clients/firebase.admin';
 import { logger } from './logger';
+import crypto from 'crypto';
 
 export type AuthenticatedRequest = VercelRequest & {
     uid: string;

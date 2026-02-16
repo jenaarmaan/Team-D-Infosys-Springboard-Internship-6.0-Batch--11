@@ -4,20 +4,28 @@
  */
 export const logger = {
     info: (message: string, context: Record<string, any> = {}) => {
-        console.log(JSON.stringify({
-            level: 'info',
-            message,
-            timestamp: new Date().toISOString(),
-            ...context
-        }));
+        try {
+            console.log(JSON.stringify({
+                level: 'info',
+                message,
+                timestamp: new Date().toISOString(),
+                ...context
+            }));
+        } catch (e) {
+            console.log(`[INFO] ${message}`, context);
+        }
     },
     warn: (message: string, context: Record<string, any> = {}) => {
-        console.warn(JSON.stringify({
-            level: 'warn',
-            message,
-            timestamp: new Date().toISOString(),
-            ...context
-        }));
+        try {
+            console.warn(JSON.stringify({
+                level: 'warn',
+                message,
+                timestamp: new Date().toISOString(),
+                ...context
+            }));
+        } catch (e) {
+            console.warn(`[WARN] ${message}`, context);
+        }
     },
     error: (message: string, error: any, context: Record<string, any> = {}) => {
         const errorDetail = {
