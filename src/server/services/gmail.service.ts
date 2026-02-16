@@ -41,9 +41,10 @@ class GmailService {
             const messages = data.messages || [];
 
             // Detailed fetch for each
-            // Reduced to 8 for reliability in serverless context
+            // Reduced to 2 for extreme safety in cold-start serverless context
+            console.log(`📧 [GMAIL SERVICE] Fetching details for ${messages.length} messages (limiting to 2)...`);
             const emails = await Promise.all(
-                messages.slice(0, 5).map(async (msg: any) => {
+                messages.slice(0, 2).map(async (msg: any) => {
                     try {
                         const detailRes = await fetch(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, {
                             headers: this.getHeaders(token)

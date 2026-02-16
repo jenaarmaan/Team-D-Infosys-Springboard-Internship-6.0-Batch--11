@@ -78,7 +78,9 @@ const safeStart = (source: string) => {
 
   // If we just had an 'aborted' error, wait longer
   if (lastErrorType === 'aborted' && now - lastErrorTime < 2000) {
-    console.log(`[VOICE] ${source} — still cooling down from abort`);
+    console.log(`[VOICE] ${source} — backing off (abort cooling)`);
+    // 🔥 Schedule a retry to ensure the mic eventually turns on
+    setTimeout(() => safeStart(`${source}-retry`), 1500);
     return;
   }
 

@@ -11,6 +11,7 @@ export function getFirebaseAdmin() {
 
         if (admin.apps.length > 0) {
             firebaseApp = admin.apps[0]!;
+            console.log("🔥 [FIREBASE ADMIN] Reusing existing app instance");
             return firebaseApp;
         }
 
@@ -28,17 +29,19 @@ export function getFirebaseAdmin() {
         if (serviceAccountKey) {
             try {
                 const serviceAccount = JSON.parse(serviceAccountKey);
+                console.log("🔥 [FIREBASE ADMIN] Service Account Key parsed successfully.");
                 firebaseApp = admin.initializeApp({
                     credential: admin.credential.cert(serviceAccount),
                     databaseURL: serviceAccount.project_id ? `https://${serviceAccount.project_id}.firebaseio.com` : undefined
                 });
                 return firebaseApp;
             } catch (err) {
-                console.error("❌ [FIREBASE ADMIN] SA Key Parse Error");
+                console.error("❌ [FIREBASE ADMIN] SA Key Parse Error", err);
             }
         }
 
         if (projectId) {
+            console.log("🔥 [FIREBASE ADMIN] Initializing with projectId.");
             firebaseApp = admin.initializeApp({ projectId });
             return firebaseApp;
         }
