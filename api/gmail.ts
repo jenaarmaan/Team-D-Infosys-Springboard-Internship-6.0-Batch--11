@@ -28,8 +28,14 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 const { limit, unread, query } = req.query;
                 console.log(`📧 [GMAIL API] Listing emails (Requested: ${limit || 'default'}, Unread: ${unread}, Query: ${query || 'none'})`);
 
+                // Enforce a hard cap for Vercel Serverless (10s limit)
+                const requestedLimit = limit ? parseInt(limit as string) : 5;
+                const safeLimit = Math.min(requestedLimit, 10);
+
+                console.log(`📧 [GMAIL API] Listing emails (Safe Limit: ${safeLimit}, Unread: ${unread})`);
+
                 const emails = await gmailService.listEmails(accessToken, {
-                    limit: limit ? parseInt(limit as string) : 3, // Very low limit for cold starts
+                    limit: safeLimit,
                     unread: unread === 'true',
                     q: query as string
                 });

@@ -78,7 +78,7 @@ const safeStart = (source: string) => {
 
   // If we just had an 'aborted' error, wait longer
   if (lastErrorType === 'aborted' && now - lastErrorTime < 2000) {
-    console.log(`[VOICE] ${source} — backing off after abort`);
+    console.log(`[VOICE] ${source} — still cooling down from abort`);
     return;
   }
 
@@ -130,7 +130,7 @@ export const initVoiceRecognition = (rec: any) => {
     restartInProgress = true;
     resetDeadlockTimer();
 
-    const delay = lastErrorType === 'aborted' ? 1000 : 200;
+    const delay = lastErrorType === 'aborted' ? 2000 : 300;
 
     setTimeout(() => {
       restartInProgress = false;

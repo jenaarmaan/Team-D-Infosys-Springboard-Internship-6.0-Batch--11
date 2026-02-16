@@ -28,24 +28,39 @@ export class TokenService {
      * Reads from Firestore, refreshes if expired.
      */
     async getValidToken(uid: string): Promise<string> {
+        console.log(`🔍 [TOKEN] Searching tokens for UID: ${uid}`);
         const db = getDb();
-        if (!db) throw new Error('DB_NOT_INITIALIZED');
+        if (!db) {
+            console.error("❌ [TOKEN] Firestore DB instance is NULL");
+            throw new Error('DB_NOT_INITIALIZED');
+        }
 
-        const doc = await db.collection('gmail_tokens').doc(uid).get();
+        let doc;
+        try {
+            doc = await db.collection('gmail_tokens').doc(uid).get();
+        } catch (err: any) {
+            console.error("❌ [TOKEN] Firestore read failed:", err.message);
+            throw new Error(`DB_READ_ERROR: ${err.message}`);
+        }
+
         if (!doc.exists) {
+            console.warn(`⚠️ [TOKEN] No Gmail document found for UID: ${uid}`);
             throw new Error('GMAIL_NOT_CONNECTED');
         }
 
         const data = doc.data() as GmailToken;
+        console.log(`✅ [TOKEN] Found token for ${data.email || 'unknown user'}. Connected: ${data.connected}`);
 
         // Check for expiration (buffer of 5 minutes)
         const now = Math.floor(Date.now() / 1000);
         if (data.expiresAt && data.expiresAt > now + 300) {
+            console.log(`⚡ [TOKEN] Access token is still valid. (Expires in ${data.expiresAt - now}s)`);
             return data.accessToken;
         }
 
-        // Token expired or about to expire - Try refresh
+        console.log("♻️ [TOKEN] Access token expired. Attempting refresh...");
         if (!data.refreshToken) {
+            console.error("❌ [TOKEN] Refresh token missing from Firestore!");
             throw new Error('REFRESH_TOKEN_MISSING');
         }
 
