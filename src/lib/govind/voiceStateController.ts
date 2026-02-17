@@ -249,6 +249,14 @@ export const resumeListening = (reason: PauseReason) => {
   safeStart("resume");
 };
 
+/**
+ * Specifically for cleared the 'GLOBAL_EXIT' lock
+ * triggered by wake word.
+ */
+export const resumeAfterWake = () => {
+  resumeListening("GLOBAL_EXIT");
+};
+
 /* ======================================================
    🛑 STOP (HARD)
    ====================================================== */
