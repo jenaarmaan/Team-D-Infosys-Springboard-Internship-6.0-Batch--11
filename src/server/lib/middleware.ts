@@ -8,41 +8,55 @@ export type AuthenticatedRequest = VercelRequest & {
 };
 
 /**
- * Optimized Middleware for High Latency
+ * Super-Resilient Middleware
+ * Optimized for high-latency jumps (e.g. Mumbai -> USA).
  */
 export const withMiddleware = (
     handler: (req: AuthenticatedRequest, res: VercelResponse) => Promise<any>
 ) => {
     return async (req: VercelRequest, res: VercelResponse) => {
         const requestId = crypto.randomUUID();
-        console.log(`🔌 [MIDDLEWARE] Auth start: ${req.url}`);
+        const start = Date.now();
 
         try {
             const authHeader = req.headers.authorization;
             if (!authHeader?.startsWith('Bearer ')) {
-                return res.status(401).json({ success: false, error: { message: 'Auth Required' } });
+                return res.status(200).json({
+                    success: false,
+                    error: { code: 'AUTH_REQUIRED', message: 'Missing Authorization header' }
+                });
             }
 
             const idToken = authHeader.split('Bearer ')[1];
             const auth = getAuth();
 
-            // Reduced timeout to 4s to catch it before Vercel kills us
+            // Increased timeout to 9 seconds. 
+            // Vercel functions have a 10s-15s limit on hobby tier.
+            // We need to give enough time for the regional jump + cold start.
             const decodedToken = await Promise.race([
                 auth.verifyIdToken(idToken),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 4000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 9000))
             ]) as any;
 
             const authReq = req as AuthenticatedRequest;
             authReq.uid = decodedToken.uid;
             authReq.requestId = requestId;
 
+            console.log(`✅ [AUTH] Verified UID: ${decodedToken.uid} (${Date.now() - start}ms)`);
             return await handler(authReq, res);
+
         } catch (error: any) {
-            console.error("🛑 [MIDDLEWARE FAIL]:", error.message);
-            return res.status(200).json({ // Return 200 with error to see it in UI
+            console.error("🛑 [AUTH ERROR]:", error.message);
+
+            // Return 200 so the frontend can display the specific error
+            return res.status(200).json({
                 success: false,
                 data: null,
-                error: { code: 'AUTH_FAILED', message: error.message }
+                error: {
+                    code: error.message === "AUTH_TIMEOUT" ? "AUTH_TIMEOUT" : "AUTH_FAILED",
+                    message: error.message,
+                    latency: Date.now() - start
+                }
             });
         }
     };

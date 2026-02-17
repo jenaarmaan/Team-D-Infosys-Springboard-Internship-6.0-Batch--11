@@ -2,35 +2,39 @@ import axios from 'axios';
 
 /**
  * Telegram Webhook Setup Script
- * Automates the one-time registration of the Vercel production URL with Telegram.
+ * Updated for the new secure proxy architecture.
  */
 async function setWebhook() {
     const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
     const SECRET_TOKEN = process.env.TELEGRAM_WEBHOOK_SECRET;
-    const VERCEL_URL = process.env.VERCEL_URL;
+    const PROD_URL = "https://govindai.vercel.app"; // Fallback to production domain
 
-    if (!BOT_TOKEN || !SECRET_TOKEN || !VERCEL_URL) {
-        console.error('❌ Missing environment variables (TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, or VERCEL_URL)');
+    console.log("🛠️ Starting Webhook Repair...");
+
+    if (!BOT_TOKEN) {
+        console.error('❌ Missing TELEGRAM_BOT_TOKEN');
         process.exit(1);
     }
 
-    const webhookUrl = `${VERCEL_URL}/api/v1/telegram?action=webhook`;
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`;
+    const webhookUrl = `${PROD_URL}/api/v1/telegram`;
+    const tgUrl = `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`;
 
     try {
-        const response = await axios.post(url, {
+        console.log(`📡 Sending request to Telegram...`);
+        const response = await axios.post(tgUrl, {
             url: webhookUrl,
-            secret_token: SECRET_TOKEN,
+            secret_token: SECRET_TOKEN || undefined,
             allowed_updates: ['message', 'edited_message']
         });
 
         if (response.data.ok) {
-            console.log(`✅ Webhook successfully set to: ${webhookUrl}`);
+            console.log(`✅ Webhook SUCCESS: ${webhookUrl}`);
+            if (SECRET_TOKEN) console.log(`🔒 Secret verification enabled.`);
         } else {
-            console.error('❌ Failed to set webhook:', response.data.description);
+            console.error('❌ Webhook FAILED:', response.data.description);
         }
     } catch (error: any) {
-        console.error('❌ Error hitting Telegram API:', error.message);
+        console.error('❌ Network Error:', error.message);
     }
 }
 
