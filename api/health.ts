@@ -1,6 +1,9 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { getFirebaseAdmin } from './_lib/firebase';
 
+/**
+ * Enterprise Health & Diagnostic Endpoint
+ * No top-level imports to prevent 500s.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     const diagnostics: any = {
         timestamp: new Date().toISOString(),
@@ -13,13 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     try {
+        const { getFirebaseAdmin } = await import('./_lib/firebase');
         const start = Date.now();
-        const app = getFirebaseAdmin();
+        const app = await getFirebaseAdmin();
         const db = app.firestore();
 
+        // Check if database is reachable
         const testDoc = await Promise.race([
             db.collection('_health_').doc('ping').get(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("FIREBASE_TIMEOUT")), 7000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error("FIREBASE_TIMEOUT")), 8000))
         ]) as any;
 
         diagnostics.db = {
@@ -28,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             app: app.name
         };
     } catch (e: any) {
-        diagnostics.db = { status: "error", message: e.message };
+        diagnostics.db = { status: "error", message: e.message, code: e.code };
     }
 
     return res.status(200).json({
