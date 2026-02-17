@@ -1,8 +1,8 @@
 import * as admin from 'firebase-admin';
 
 /**
- * Cold-Start Optimized Firebase Admin Singleton
- * Hardened for Vercel Serverless (high-latency regions like bom1)
+ * Hardened Firebase Admin Singleton
+ * Optimized for high-latency regions (e.g., bom1) by minimizing init overhead.
  */
 let firebaseApp: admin.app.App | null = null;
 
@@ -10,9 +10,9 @@ export function getFirebaseAdmin(): admin.app.App {
     try {
         if (firebaseApp) return firebaseApp;
 
+        // Reuse if already initialized by another module
         if (admin.apps.length > 0) {
             firebaseApp = admin.apps[0]!;
-            console.log("🔥 [FIREBASE ADMIN] Reusing existing app instance. Total Apps:", admin.apps.length);
             return firebaseApp;
         }
 
@@ -23,56 +23,60 @@ export function getFirebaseAdmin(): admin.app.App {
             process.env.VITE_FIREBASE_PROJECT_ID ||
             process.env.VITE_PROJECT_ID;
 
-        console.log("🔥 [FIREBASE ADMIN] Initializing Singleton (Production/Serverless)", {
-            hasSaKey: !!serviceAccountKey,
-            providedProjectId: projectIdFromEnv,
-            region: process.env.VERCEL_REGION || 'local'
-        });
-
+        // Strategy 1: Service Account (Best for Auth/Firestore)
         if (serviceAccountKey) {
             try {
                 const serviceAccount = JSON.parse(serviceAccountKey);
-                console.log("🔥 [FIREBASE ADMIN] Using Service Account for Project:", serviceAccount.project_id);
                 firebaseApp = admin.initializeApp({
-                    credential: admin.credential.cert(serviceAccount),
-                    databaseURL: serviceAccount.project_id ? `https://${serviceAccount.project_id}.firebaseio.com` : undefined
+                    credential: admin.credential.cert(serviceAccount)
+                    // Removed databaseURL to avoid unnecessary RTDB handshakes
                 });
+                console.log("🔥 [FIREBASE ADMIN] Init: Service Account");
                 return firebaseApp;
             } catch (err: any) {
-                console.error("❌ [FIREBASE ADMIN] SA Key Parse/Init Error:", err.message);
+                console.error("❌ [FIREBASE ADMIN] SA Key Init Failed:", err.message);
             }
         }
 
+        // Strategy 2: Project ID (Fallback)
         if (projectIdFromEnv) {
             try {
-                console.log("🔥 [FIREBASE ADMIN] Falling back to direct projectId initialization.");
                 firebaseApp = admin.initializeApp({ projectId: projectIdFromEnv });
+                console.log("🔥 [FIREBASE ADMIN] Init: ProjectID Fallback");
                 return firebaseApp;
-            } catch (initErr: any) {
-                console.error("❌ [FIREBASE ADMIN] ProjectId Init Error:", initErr.message);
+            } catch (err: any) {
+                console.error("❌ [FIREBASE ADMIN] ProjectID Init Failed:", err.message);
             }
         }
 
-        console.warn("⚠️ [FIREBASE ADMIN] No explicit config found, attempting default (ADC) initialization.");
+        // Final desperation: Default Init
         try {
             firebaseApp = admin.initializeApp();
             return firebaseApp;
-        } catch (adcErr: any) {
-            console.error("❌ [FIREBASE ADMIN] ADC Init Error:", adcErr.message);
+        } catch (e) {
+            if (admin.apps.length > 0) return admin.apps[0]!;
+            throw new Error("FIREBASE_INIT_FATAL");
         }
-
-        // Final desperation: If everything failed, try to return any existing app
-        if (admin.apps.length > 0) return admin.apps[0]!;
-        throw new Error("FIREBASE_ADMIN_INIT_FAILURE");
     } catch (error: any) {
-        console.error("🛑 [FIREBASE ADMIN] Fatal Recovery Failure:", error.message);
-        // We must return SOMETHING or it will crash. 
-        // Returning any existing app is better than a crash.
+        console.error("🛑 [FIREBASE ADMIN] Fatal failure:", error.message);
         return (admin.apps[0] || {} as any) as admin.app.App;
     }
 }
 
-export const getDb = () => getFirebaseAdmin().firestore();
-export const getAuth = () => getFirebaseAdmin().auth();
-export const db = null;
-export const auth = null;
+export const getDb = () => {
+    const app = getFirebaseAdmin();
+    if (!app || typeof app.firestore !== 'function') {
+        console.error("❌ [FIREBASE ADMIN] db() requested but app.firestore is missing");
+        throw new Error("FIRESTORE_NOT_AVAILABLE");
+    }
+    return app.firestore();
+};
+
+export const getAuth = () => {
+    const app = getFirebaseAdmin();
+    if (!app || typeof app.auth !== 'function') {
+        console.error("❌ [FIREBASE ADMIN] auth() requested but app.auth is missing");
+        throw new Error("AUTH_NOT_AVAILABLE");
+    }
+    return app.auth();
+};

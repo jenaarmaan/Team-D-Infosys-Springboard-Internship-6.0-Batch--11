@@ -6,14 +6,18 @@ export default async function handler(
     res: VercelResponse
 ) {
     let dbStatus = "unchecked";
+    let dbMetric = -1;
+
     try {
+        const start = Date.now();
         const db = getDb();
         if (db) {
-            // Test reachability with a 2-second timeout
+            // Test reachability with a 5-second timeout
             const testPromise = db.collection('_health_check').doc('ping').get();
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000));
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase Timeout")), 5000));
             await Promise.race([testPromise, timeoutPromise]);
             dbStatus = "connected";
+            dbMetric = Date.now() - start;
         } else {
             dbStatus = "null_instance";
         }
@@ -27,10 +31,12 @@ export default async function handler(
             status: "ok",
             timestamp: new Date().toISOString(),
             db: dbStatus,
+            dbLatencyMs: dbMetric,
+            region: process.env.VERCEL_REGION || 'unknown',
             env: {
                 hasFirebaseSA: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
-                hasGemini: !!(process.env.GEMINI_API_KEY || process.env.apiKey),
-                hasTelegram: !!process.env.TELEGRAM_BOT_TOKEN
+                hasWebhookSecret: !!process.env.TELEGRAM_WEBHOOK_SECRET,
+                hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
             }
         },
         error: null
