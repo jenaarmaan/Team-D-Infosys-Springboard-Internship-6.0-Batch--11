@@ -64,7 +64,26 @@ export class TelegramService {
             const chatId = message.chat.id;
 
             // 2. Resolve UID: Maps Telegram chatId to Firebase UID
-            const uid = await this.resolveUidForChat(chatId);
+            let uid = await this.resolveUidForChat(chatId);
+
+            // 🛠️ ACCOUNT LINKING LOGIC
+            if (message.text.startsWith('/link')) {
+                const email = message.text.replace('/link', '').trim();
+                if (email) {
+                    logger.info('Attempting Telegram link', { chatId, email });
+                    const linkedUid = await this.linkUserByEmail(chatId, email);
+                    if (linkedUid) {
+                        await this.sendMessage(chatId, `✅ Connection established! your Telegram is now linked to ${email}. You can now use Govind to manage your messages.`);
+                        uid = linkedUid;
+                    } else {
+                        await this.sendMessage(chatId, `❌ Link failed. We couldn't find a registered Govind account with email: ${email}. Please check your spelling or sign up first.`);
+                        return;
+                    }
+                } else {
+                    await this.sendMessage(chatId, "📌 To link your account, please send: /link your_email@example.com");
+                    return;
+                }
+            }
 
             if (!uid) {
                 logger.warn('Incoming Telegram update ignored: No UID mapping found for chat', { chatId, updateId });
@@ -148,6 +167,39 @@ export class TelegramService {
             return snapshot.docs[0].id;
         } catch (err) {
             logger.error('UID Resolution failed', err);
+            return null;
+        }
+    }
+
+    /**
+     * Links a Telegram Chat ID to a user's Firebase account by Email
+     */
+    private async linkUserByEmail(chatId: number, email: string): Promise<string | null> {
+        const db = getDb();
+        if (!db) return null;
+        try {
+            const snapshot = await db.collection('users')
+                .where('email', '==', email.toLowerCase())
+                .limit(1)
+                .get();
+
+            if (snapshot.empty) return null;
+
+            const userDoc = snapshot.docs[0];
+            const uid = userDoc.id;
+
+            // Update user document with mapping
+            await userDoc.ref.update({
+                telegramChatId: chatId,
+                'connectedApps.telegram': true,
+                updatedAt: new Date().toISOString()
+            });
+
+            // Log for audit
+            logger.info('Telegram account linked successfully', { uid, chatId, email });
+            return uid;
+        } catch (err) {
+            logger.error('Failed to link Telegram by email', err, { chatId, email });
             return null;
         }
     }

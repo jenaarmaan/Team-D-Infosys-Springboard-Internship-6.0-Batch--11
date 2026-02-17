@@ -64,7 +64,7 @@ export class TelegramClient {
           senderId,
           senderName,
           text,
-          date: new Date(date)
+          date: typeof date === 'number' && date < 2000000000 ? new Date(date * 1000) : new Date(date)
         });
 
         // Sort and limit per-chat cache

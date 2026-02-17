@@ -119,8 +119,31 @@ const Telegram = () => {
                                         </div>
                                     ))}
                                     {!error && unreadChats.length === 0 && (
-                                        <div className="text-center py-10 text-muted-foreground italic">
-                                            No active conversations found.
+                                        <div className="text-center py-10 space-y-6">
+                                            <div className="p-6 rounded-2xl bg-[#0088cc]/5 border border-[#0088cc]/20 max-w-sm mx-auto">
+                                                <Bot className="w-12 h-12 text-[#0088cc] mx-auto mb-4 animate-bounce" />
+                                                <h3 className="text-lg font-bold text-white mb-2">Link Your Telegram</h3>
+                                                <p className="text-sm text-muted-foreground mb-6">
+                                                    To see your messages here, you need to link your Telegram account to Govind.
+                                                </p>
+
+                                                <div className="space-y-4 text-left">
+                                                    <div className="flex gap-3 items-start">
+                                                        <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</div>
+                                                        <p className="text-xs text-white/80">Open <a href="https://t.me/your_bot_name" target="_blank" className="text-[#0088cc] underline">@VoiceMailBot</a> on Telegram</p>
+                                                    </div>
+                                                    <div className="flex gap-3 items-start">
+                                                        <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</div>
+                                                        <p className="text-xs text-white/80">Send the command: <strong>/link</strong> followed by your email</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-8 pt-6 border-t border-[#0088cc]/10">
+                                                    <p className="text-[10px] text-muted-foreground italic">
+                                                        Govind uses end-to-end mapping to ensure your messages stay private.
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
