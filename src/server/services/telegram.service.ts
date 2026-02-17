@@ -3,7 +3,7 @@ import { logger } from '../lib/logger';
 
 /**
  * Enterprise Telegram Service
- * Handles outgoing messages and idempotent incoming updates.
+ * Optimized for Vercel Serverless and high-latency Firestore operations.
  */
 export class TelegramService {
     private get botToken() {
@@ -14,8 +14,8 @@ export class TelegramService {
      * Send a message to a Telegram chat
      */
     async sendMessage(chatId: string | number, text: string, context: Record<string, any> = {}): Promise<any> {
-        const { uid, requestId } = context;
-        if (!this.botToken) throw new Error('TELEGRAM_BOT_TOKEN missing');
+        if (!this.botToken) throw new Error('TELEGRAM_BOT_TOKEN_MISSING');
+        const { uid } = context;
 
         try {
             const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
@@ -23,67 +23,66 @@ export class TelegramService {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: chatId, text }),
-                signal: AbortSignal.timeout(8000) // 8s timeout
             });
 
-            console.log(`📡 [TELEGRAM API] Send Status: ${response.status}`);
             const data = await response.json();
-
-            if (!data.ok) {
-                console.error(`🛑 [TELEGRAM API ERROR]:`, data);
-                throw new Error(data.description || 'Telegram API Error');
-            }
-
+            if (!data.ok) throw new Error(data.description || 'TG_API_ERROR');
             return data.result;
         } catch (error: any) {
-            logger.error('Telegram send failed', error, { uid, requestId, chatId });
-            throw { code: 'MESSAGING_FAILED', message: 'Failed to send Telegram message', details: error.message };
+            logger.error('Telegram send failed', error, { uid, chatId });
+            throw error;
         }
     }
 
     /**
-     * Process incoming Webhook update with Idempotency
+     * Webhook Processor
      */
     async processWebhookUpdate(update: any): Promise<void> {
         const updateId = update.update_id;
         if (!updateId) return;
 
         const db = getDb();
-        if (!db) throw new Error('DB_NOT_READY');
+        const message = update.message || update.edited_message;
+        if (!message || !message.text) return;
 
-        try {
-            const message = update.message || update.edited_message;
-            if (!message || !message.text) return;
+        const chatId = message.chat.id;
+        const text = message.text;
 
-            const chatId = message.chat.id;
-            let uid = await this.resolveUidForChat(chatId);
+        console.log(`📡 [TG WEBHOOK] Update ${updateId} from Chat ${chatId}: "${text.substring(0, 20)}..."`);
 
-            // ACCOUNT LINKING
-            if (message.text.startsWith('/link')) {
-                const email = message.text.replace('/link', '').trim();
-                if (email) {
-                    const linkedUid = await this.linkUserByEmail(chatId, email);
-                    if (linkedUid) {
-                        await this.sendMessage(chatId, `✅ Connection established! Account linked to ${email}.`);
-                        uid = linkedUid;
-                    } else {
-                        await this.sendMessage(chatId, `❌ Link failed. No account found for ${email}.`);
-                        return;
-                    }
+        // 1. Resolve UID
+        let uid = await this.resolveUidForChat(chatId);
+
+        // 2. Handle Linking Command
+        if (text.startsWith('/link')) {
+            const email = text.replace('/link', '').trim().toLowerCase();
+            if (email) {
+                console.log(`🔗 [TG LINK] Linking ${chatId} to ${email}`);
+                const linkedUid = await this.linkUserByEmail(chatId, email);
+                if (linkedUid) {
+                    await this.sendMessage(chatId, `✅ Connection established! Your Telegram is now linked to ${email}.`);
+                    uid = linkedUid;
                 } else {
-                    await this.sendMessage(chatId, "📌 Send: /link your_email@example.com");
+                    await this.sendMessage(chatId, `❌ Link failed. No registered account found for ${email}. Please sign up at govindai.vercel.app first.`);
                     return;
                 }
-            }
-
-            if (!uid) {
-                console.warn(`⚠️ [TG WEBHOOK] No UID link for chatId ${chatId}`);
+            } else {
+                await this.sendMessage(chatId, "📌 To link your account, send: /link your_email@example.com");
                 return;
             }
+        }
 
-            const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
+        if (!uid) {
+            console.warn(`⚠️ [TG WEBHOOK] No UID found for ${chatId}. Update ignored.`);
+            return;
+        }
 
-            // Check existence without full doc fetch if possible (optimized)
+        // 3. Save to Firestore (with deduplication)
+        try {
+            const docId = `update_${updateId}`;
+            const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(docId);
+
+            // Fast check: prevents double processing
             const exists = (await docRef.get()).exists;
             if (exists) return;
 
@@ -91,29 +90,28 @@ export class TelegramService {
                 processedAt: new Date().toISOString(),
                 chatId,
                 senderId: message.from.id,
-                senderName: message.from.first_name,
+                senderName: message.from.first_name || 'Unknown',
                 text: message.text,
                 date: message.date,
                 uid,
-                chatTitle: message.chat.title || `${message.chat.first_name || ''} ${message.chat.last_name || ''}`.trim(),
+                chatTitle: message.chat.title || `${message.from.first_name || ''} ${message.from.last_name || ''}`.trim() || 'Private Chat',
                 chatType: message.chat.type
             });
 
-            console.log(`📡 [TG WEBHOOK] Update ${updateId} synced for ${uid}`);
-        } catch (error: any) {
-            console.error('🛑 [TG WEBHOOK SERVICE FAIL]:', error.message);
-            throw error;
+            console.log(`✅ [TG WEBHOOK] Sync complete for UID ${uid}`);
+        } catch (err: any) {
+            console.error(`❌ [TG SYNC FAIL]:`, err.message);
+            throw err;
         }
     }
 
     /**
-     * Fetch recent updates for a user
+     * Fetch updates for frontend
      */
     async getUpdates(uid: string, limit: number = 50): Promise<any[]> {
         const db = getDb();
         try {
-            console.log(`🔍 [TG SERVICE] Fetching updates for ${uid}`);
-            // Use a simple query to avoid index latency
+            console.log(`🔍 [TG SERVICE] Fetching for UID: ${uid}`);
             const snapshot = await db.collection('telegram_updates')
                 .doc(uid)
                 .collection('updates')
@@ -121,8 +119,8 @@ export class TelegramService {
                 .get();
 
             return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (error) {
-            logger.error('Failed to fetch updates', error, { uid });
+        } catch (error: any) {
+            console.error(`❌ [GET UPDATES FAIL]:`, error.message);
             return [];
         }
     }
@@ -135,13 +133,12 @@ export class TelegramService {
                 .limit(1)
                 .get();
 
-            if (snapshot.empty) {
-                const globalLink = await db.collection('telegram_config').doc('mappings').get();
-                const mappings = globalLink.data() as Record<string, string>;
-                return (mappings && mappings[chatId.toString()]) || null;
-            }
+            if (!snapshot.empty) return snapshot.docs[0].id;
 
-            return snapshot.docs[0].id;
+            // Fallback via mappings doc
+            const globalLink = await db.collection('telegram_config').doc('mappings').get();
+            const mappings = globalLink.data() as Record<string, string>;
+            return (mappings && mappings[chatId.toString()]) || null;
         } catch (err) {
             return null;
         }
@@ -151,7 +148,7 @@ export class TelegramService {
         const db = getDb();
         try {
             const snapshot = await db.collection('users')
-                .where('email', '==', email.toLowerCase())
+                .where('email', '==', email)
                 .limit(1)
                 .get();
 
@@ -170,6 +167,3 @@ export class TelegramService {
         }
     }
 }
-
-// REMOVED top-level instantiation to prevent module initialization crashes
-// We will instantiate inside the handler

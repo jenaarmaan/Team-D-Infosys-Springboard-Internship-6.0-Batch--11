@@ -1,82 +1,70 @@
 import * as admin from 'firebase-admin';
 
 /**
- * Hardened Firebase Admin Singleton
- * Optimized for high-latency regions (e.g., bom1) by minimizing init overhead.
+ * Super-Resilient Firebase Admin Handler
+ * Designed to survive cold starts and regional latency in Vercel bom1.
  */
 let firebaseApp: admin.app.App | null = null;
 
 export function getFirebaseAdmin(): admin.app.App {
+    const apps = admin.apps;
+    if (apps.length > 0) return apps[0]!;
+
+    const saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    const pId = process.env.projectId || process.env.VITE_FIREBASE_PROJECT_ID || process.env.PROJECT_ID;
+
+    console.log("🔥 [FB ADMIN] Init attempt", { hasSA: !!saKey, pId, apps: apps.length });
+
     try {
-        if (firebaseApp) return firebaseApp;
-
-        // Reuse if already initialized by another module
-        if (admin.apps.length > 0) {
-            firebaseApp = admin.apps[0]!;
-            return firebaseApp;
-        }
-
-        const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-        const projectIdFromEnv = process.env.projectId ||
-            process.env.PROJECT_ID ||
-            process.env.FIREBASE_PROJECT_ID ||
-            process.env.VITE_FIREBASE_PROJECT_ID ||
-            process.env.VITE_PROJECT_ID;
-
-        // Strategy 1: Service Account (Best for Auth/Firestore)
-        if (serviceAccountKey) {
+        if (saKey) {
             try {
-                const serviceAccount = JSON.parse(serviceAccountKey);
+                const config = JSON.parse(saKey);
                 firebaseApp = admin.initializeApp({
-                    credential: admin.credential.cert(serviceAccount)
-                    // Removed databaseURL to avoid unnecessary RTDB handshakes
-                });
-                console.log("🔥 [FIREBASE ADMIN] Init: Service Account");
+                    credential: admin.credential.cert(config)
+                }, 'govind-admin-' + Date.now()); // Unique name to avoid conflicts if re-running
+                console.log("✅ [FB ADMIN] Init with SA Success");
                 return firebaseApp;
-            } catch (err: any) {
-                console.error("❌ [FIREBASE ADMIN] SA Key Init Failed:", err.message);
+            } catch (pErr: any) {
+                console.error("❌ [FB ADMIN] JSON Parse Fail:", pErr.message);
             }
         }
 
-        // Strategy 2: Project ID (Fallback)
-        if (projectIdFromEnv) {
-            try {
-                firebaseApp = admin.initializeApp({ projectId: projectIdFromEnv });
-                console.log("🔥 [FIREBASE ADMIN] Init: ProjectID Fallback");
-                return firebaseApp;
-            } catch (err: any) {
-                console.error("❌ [FIREBASE ADMIN] ProjectID Init Failed:", err.message);
-            }
-        }
-
-        // Final desperation: Default Init
-        try {
-            firebaseApp = admin.initializeApp();
+        if (pId) {
+            firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-fallback-' + Date.now());
+            console.log("✅ [FB ADMIN] Init with ProjectId Success");
             return firebaseApp;
-        } catch (e) {
-            if (admin.apps.length > 0) return admin.apps[0]!;
-            throw new Error("FIREBASE_INIT_FATAL");
         }
-    } catch (error: any) {
-        console.error("🛑 [FIREBASE ADMIN] Fatal failure:", error.message);
-        return (admin.apps[0] || {} as any) as admin.app.App;
+
+        // ADC Fallback
+        firebaseApp = admin.initializeApp();
+        return firebaseApp;
+    } catch (fatal: any) {
+        console.error("🛑 [FB ADMIN] FATAL:", fatal.message);
+        if (admin.apps.length > 0) return admin.apps[0]!;
+        throw fatal;
     }
 }
 
-export const getDb = () => {
-    const app = getFirebaseAdmin();
-    if (!app || typeof app.firestore !== 'function') {
-        console.error("❌ [FIREBASE ADMIN] db() requested but app.firestore is missing");
-        throw new Error("FIRESTORE_NOT_AVAILABLE");
+/**
+ * Safe Database Getter: Prevents "Cannot read property of undefined" crashes.
+ */
+export const getDb = (): admin.firestore.Firestore => {
+    try {
+        const app = getFirebaseAdmin();
+        if (!app) throw new Error("APP_NULL");
+        return app.firestore();
+    } catch (e: any) {
+        console.error("❌ [DB GET FAIL]:", e.message);
+        // Return a proxy that logs rather than crashing, but better to throw and catch at handler
+        throw e;
     }
-    return app.firestore();
 };
 
-export const getAuth = () => {
-    const app = getFirebaseAdmin();
-    if (!app || typeof app.auth !== 'function') {
-        console.error("❌ [FIREBASE ADMIN] auth() requested but app.auth is missing");
-        throw new Error("AUTH_NOT_AVAILABLE");
+export const getAuth = (): admin.auth.Auth => {
+    try {
+        const app = getFirebaseAdmin();
+        return app.auth();
+    } catch (e: any) {
+        throw e;
     }
-    return app.auth();
 };
