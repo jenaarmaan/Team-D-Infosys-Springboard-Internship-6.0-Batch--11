@@ -303,7 +303,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       // 2. Fetch via Secure Proxy
       console.log("[GMAIL] Attempting backend fetch for section:", currentSection);
       const result = await apiClient.get<any>(
-        `/api/v1/gmail?action=list&limit=5&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
+        `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
 
@@ -324,7 +324,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
     // Fallback: Direct Fetch
     try {
       console.log("[GMAIL] Attempting direct frontend fetch for section:", currentSection);
-      const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&q=${encodeURIComponent(query)}`;
+      const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=${encodeURIComponent(query)}`;
       const response = await fetch(listUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       });

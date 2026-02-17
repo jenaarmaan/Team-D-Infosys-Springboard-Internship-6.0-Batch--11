@@ -21,8 +21,8 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
         switch (action) {
             case 'list': {
                 const { limit, unread, query } = req.query;
-                const requestedLimit = limit ? parseInt(limit as string) : 5;
-                const safeLimit = Math.min(requestedLimit, 10);
+                const requestedLimit = limit ? parseInt(limit as string) : 20;
+                const safeLimit = Math.min(requestedLimit, 50);
 
                 const emails = await gmailService.listEmails(accessToken, {
                     limit: safeLimit,

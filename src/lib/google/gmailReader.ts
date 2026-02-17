@@ -40,7 +40,7 @@ export async function fetchInbox(limit = 5) {
 
     // Map to simple structure
     const emails = await Promise.all(
-      messages.slice(0, 2).map(async (msg: any) => {
+      messages.map(async (msg: any) => {
         try {
           const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -100,7 +100,7 @@ export async function fetchUnreadInbox(limit = 10) {
     const data = await response.json();
     const messages = data.messages || [];
     const emails = await Promise.all(
-      messages.slice(0, 2).map(async (msg: any) => {
+      messages.map(async (msg: any) => {
         try {
           const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
             headers: { 'Authorization': `Bearer ${token}` }
