@@ -15,13 +15,8 @@ export async function sendEmail(to: string, subject: string, body: string) {
     console.error("[GMAIL] Backend send failed, falling back.", err);
   }
 
-  // Fallback: Direct GAPI Send
+  // Fallback: Direct Fetch
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
-
     const rawMessage = [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -35,10 +30,17 @@ export async function sendEmail(to: string, subject: string, body: string) {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    const response = await gmail.messages.send({
-      resource: { raw: encodedMessage }
+    const response = await fetch('https://gmail.googleapis.com/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ raw: encodedMessage })
     });
-    return response.result;
+
+    if (!response.ok) throw new Error(`Fallback send failed: ${response.status}`);
+    return await response.json();
   } catch (fallbackErr) {
     console.error("[GMAIL] Fallback send failed:", fallbackErr);
     throw fallbackErr;
@@ -59,12 +61,8 @@ export async function replyToEmail(threadId: string, to: string, subject: string
     console.error("[GMAIL] Backend reply failed, falling back.", err);
   }
 
-  // Fallback: Direct GAPI Reply
+  // Fallback: Direct Fetch
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
     const rawMessage = [
       `To: ${to}`,
       `Subject: Re: ${subject}`,
@@ -80,13 +78,17 @@ export async function replyToEmail(threadId: string, to: string, subject: string
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    const response = await gmail.messages.send({
-      resource: {
-        raw: encodedMessage,
-        threadId: threadId
-      }
+    const response = await fetch('https://gmail.googleapis.com/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ raw: encodedMessage, threadId })
     });
-    return response.result;
+
+    if (!response.ok) throw new Error(`Fallback reply failed: ${response.status}`);
+    return await response.json();
   } catch (fallbackErr) {
     console.error("[GMAIL] Fallback reply failed:", fallbackErr);
     throw fallbackErr;

@@ -321,34 +321,39 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       console.error("[GMAIL] Backend fetch crashed, falling back to frontend direct fetch.", err);
     }
 
-    // Fallback: Direct GAPI Fetch
+    // Fallback: Direct Fetch
     try {
-      const { getGmailClient } = await import("@/lib/google/gmailClient");
-      const gmail = await getGmailClient();
-      if (!gmail?.messages) {
-        throw new Error("GAPI Gmail client or messages resource not available");
-      }
-      const response = await gmail.messages.list({
-        maxResults: 5,
-        q: query
+      console.log("[GMAIL] Attempting direct frontend fetch for section:", currentSection);
+      const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&q=${encodeURIComponent(query)}`;
+      const response = await fetch(listUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      const messages = response.result.messages || [];
+      if (!response.ok) throw new Error(`Direct Fetch failed: ${response.status}`);
+
+      const data = await response.json();
+      const messages = data.messages || [];
       const emails = await Promise.all(
         messages.map(async (msg: any) => {
-          const detail = await gmail.messages.get({ id: msg.id, format: 'metadata' });
-          const headers = detail.result.payload.headers || [];
-          const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+          try {
+            const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!detailRes.ok) return null;
+            const detail = await detailRes.json();
+            const headers = detail.payload?.headers || [];
+            const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
-          return {
-            id: msg.id,
-            threadId: detail.result.threadId,
-            from: getHeader('From'),
-            subject: getHeader('Subject'),
-            date: new Date(getHeader('Date')),
-            snippet: detail.result.snippet,
-            isUnread: detail.result.labelIds?.includes('UNREAD')
-          };
+            return {
+              id: msg.id,
+              threadId: detail.threadId,
+              from: getHeader('From'),
+              subject: getHeader('Subject'),
+              date: new Date(getHeader('Date')),
+              snippet: detail.snippet,
+              isUnread: detail.labelIds?.includes('UNREAD')
+            };
+          } catch (e) { return null; }
         })
       );
       setInboxEmails(emails.filter(Boolean));

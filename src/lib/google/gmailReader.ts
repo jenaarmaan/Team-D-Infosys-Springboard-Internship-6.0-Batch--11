@@ -24,33 +24,42 @@ export async function fetchInbox(limit = 5) {
     console.error("[GMAIL] Backend fetch crashed, falling back to frontend direct fetch.", err);
   }
 
-  // Fallback: Direct GAPI Fetch
+  // Fallback: Direct Fetch (Avoids flaky GAPI initialization)
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
-    const response = await gmail.messages.list({
-      maxResults: limit,
-      q: 'label:INBOX'
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}&q=label:INBOX`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    const messages = response.result.messages || [];
+    if (!response.ok) {
+      throw new Error(`Direct Gmail Fetch failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const messages = data.messages || [];
+
+    // Map to simple structure
     const emails = await Promise.all(
       messages.slice(0, 2).map(async (msg: any) => {
-        const detail = await gmail.messages.get({ id: msg.id, format: 'metadata' });
-        const headers = detail.result.payload.headers || [];
-        const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+        try {
+          const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!detailRes.ok) return null;
+          const detail = await detailRes.json();
+          const headers = detail.payload?.headers || [];
+          const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
-        return {
-          id: msg.id,
-          threadId: detail.result.threadId,
-          from: getHeader('From'),
-          subject: getHeader('Subject'),
-          date: new Date(getHeader('Date')),
-          snippet: detail.result.snippet,
-          isUnread: detail.result.labelIds?.includes('UNREAD')
-        };
+          return {
+            id: msg.id,
+            threadId: detail.threadId,
+            from: getHeader('From'),
+            subject: getHeader('Subject'),
+            date: new Date(getHeader('Date')),
+            snippet: detail.snippet,
+            isUnread: detail.labelIds?.includes('UNREAD')
+          };
+        } catch (e) { return null; }
       })
     );
     return emails.filter(Boolean);
@@ -79,38 +88,43 @@ export async function fetchUnreadInbox(limit = 10) {
     console.error("[GMAIL][UNREAD] Backend fetch failed, falling back.", err);
   }
 
-  // Fallback: Direct GAPI Fetch
+  // Fallback: Direct Fetch
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
-    const response = await gmail.messages.list({
-      maxResults: limit,
-      q: 'is:unread label:INBOX'
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}&q=is:unread label:INBOX`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    const messages = response.result.messages || [];
+    if (!response.ok) throw new Error(`Fallback failed: ${response.status}`);
+
+    const data = await response.json();
+    const messages = data.messages || [];
     const emails = await Promise.all(
       messages.slice(0, 2).map(async (msg: any) => {
-        const detail = await gmail.messages.get({ id: msg.id, format: 'metadata' });
-        const headers = detail.result.payload.headers || [];
-        const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+        try {
+          const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) return null;
+          const detail = await res.json();
+          const headers = detail.payload?.headers || [];
+          const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
-        return {
-          id: msg.id,
-          threadId: detail.result.threadId,
-          from: getHeader('From'),
-          subject: getHeader('Subject'),
-          date: new Date(getHeader('Date')),
-          snippet: detail.result.snippet,
-          isUnread: true
-        };
+          return {
+            id: msg.id,
+            threadId: detail.threadId,
+            from: getHeader('From'),
+            subject: getHeader('Subject'),
+            date: new Date(getHeader('Date')),
+            snippet: detail.snippet,
+            isUnread: true
+          };
+        } catch (e) { return null; }
       })
     );
     return emails.filter(Boolean);
   } catch (fallbackErr) {
-    console.error("[GMAIL][UNREAD] Fallback fetch failed:", fallbackErr);
+    console.error("[GMAIL][UNREAD] Fallback failed:", fallbackErr);
     throw fallbackErr;
   }
 }
@@ -137,14 +151,14 @@ export async function readEmail(messageId: string) {
     console.error("[GMAIL][GET] Backend fetch failed, falling back.", err);
   }
 
-  // Fallback: Direct GAPI Fetch
+  // Fallback: Direct Fetch
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
-    const response = await gmail.messages.get({ id: messageId, format: 'full' });
-    const data = response.result;
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error(`Fallback failed: ${response.status}`);
+
+    const data = await response.json();
     const payload = data.payload;
     const headers = payload?.headers || [];
     const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
@@ -173,7 +187,7 @@ export async function readEmail(messageId: string) {
       body: extractBody(payload)
     };
   } catch (fallbackErr) {
-    console.error("[GMAIL][GET] Fallback fetch failed:", fallbackErr);
+    console.error("[GMAIL][GET] Fallback failed:", fallbackErr);
     throw fallbackErr;
   }
 }
@@ -191,19 +205,19 @@ export async function markEmailAsRead(messageId: string) {
     console.error("[GMAIL][READ] Backend mark-read failed, falling back.", err);
   }
 
-  // Fallback: Direct GAPI Fetch
+  // Fallback: Direct Fetch
   try {
-    const gmail = await getGmailClient();
-    if (!gmail?.messages) {
-      throw new Error("GAPI Gmail client or messages resource not available");
-    }
-    await gmail.messages.batchModify({
-      ids: [messageId],
-      removeLabelIds: ['UNREAD']
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ removeLabelIds: ['UNREAD'] })
     });
-    return true;
+    return response.ok;
   } catch (fallbackErr) {
-    console.error("[GMAIL][READ] Fallback mark-read failed:", fallbackErr);
+    console.error("[GMAIL][READ] Fallback failed:", fallbackErr);
     return false;
   }
 }
