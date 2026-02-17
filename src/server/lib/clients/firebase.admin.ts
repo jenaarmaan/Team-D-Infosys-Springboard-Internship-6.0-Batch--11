@@ -2,65 +2,54 @@ import * as admin from 'firebase-admin';
 
 /**
  * Super-Resilient Firebase Admin Handler
- * Optimized for high-latency regions (e.g., bom1).
  */
 let firebaseApp: admin.app.App | null = null;
 
 export function getFirebaseAdmin(): admin.app.App {
-    // 1. Check if already initialized in this request context
-    if (firebaseApp) return firebaseApp;
+    const apps = admin.apps;
 
-    // 2. Check global apps array
-    if (admin.apps.length > 0) {
-        // Look for our specific named app first to ensure we have the right credentials
-        const existingApp = admin.apps.find(a => a?.name === 'govind-prod');
-        if (existingApp) {
-            firebaseApp = existingApp;
-            return firebaseApp;
-        }
-
-        // If there's an app but it's not ours, we might be sharing a process.
-        // If it's the default app, we might try to reuse it if it was initialized correctly.
-        // However, to be safe in serverless, we'll try to initialize ours if not present.
-    }
+    // Always prioritize an existing 'govind-prod' app to avoid leak & config mismatch
+    const existing = apps.find(a => a?.name === 'govind-prod');
+    if (existing) return existing;
 
     const saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    const pId = process.env.projectId || process.env.VITE_FIREBASE_PROJECT_ID || process.env.PROJECT_ID;
+    const pId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.projectId || process.env.PROJECT_ID || 'voicemail-f11f3';
 
-    console.log("🔥 [FB ADMIN] Booting...", { hasSA: !!saKey, pId });
+    console.log("🔥 [FB ADMIN] Booting govind-prod...", { hasSA: !!saKey, pId });
 
     try {
         if (saKey) {
             try {
-                const config = JSON.parse(saKey);
+                // Handle possible double-stringified keys or trailing chars
+                let cleanKey = saKey.trim();
+                const config = JSON.parse(cleanKey);
+
                 firebaseApp = admin.initializeApp({
                     credential: admin.credential.cert(config)
                 }, 'govind-prod');
+
                 console.log("✅ [FB ADMIN] Service Account Connection Ready");
                 return firebaseApp;
             } catch (pErr: any) {
                 console.error("❌ [FB ADMIN] SA Config Parse Error:", pErr.message);
+                // Fallback to Project ID if SA fails
             }
         }
 
-        if (pId) {
-            firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-prod');
-            console.log("✅ [FB ADMIN] ProjectID Connection Ready (Limited)");
-            return firebaseApp;
+        // Fallback to Project ID (Limited functionality - might fail on Auth)
+        firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-prod');
+        console.log("✅ [FB ADMIN] ProjectID Connection Ready (Fallback)");
+        return firebaseApp;
+
+    } catch (fatal: any) {
+        if (fatal.code === 'app/duplicate-app' || fatal.message?.includes('already exists')) {
+            return admin.app('govind-prod');
         }
 
-        // Fallback to default
+        console.error("🛑 [FB ADMIN] FATAL:", fatal.message);
+
+        // Final desperation: Return the default app if it exists
         if (admin.apps.length > 0) return admin.apps[0]!;
-        firebaseApp = admin.initializeApp();
-        return firebaseApp;
-    } catch (fatal: any) {
-        // If "already exists" error, just find it
-        if (fatal.code === 'app/duplicate-app' || fatal.message?.includes('already exists')) {
-            const app = admin.apps.find(a => a?.name === 'govind-prod') || admin.apps[0]!;
-            firebaseApp = app;
-            return app;
-        }
-        console.error("🛑 [FB ADMIN] Fatal Error during init:", fatal.message);
         throw fatal;
     }
 }

@@ -1,5 +1,4 @@
 import { getDb } from '../lib/clients/firebase.admin';
-import { logger } from '../lib/logger';
 
 /**
  * Enterprise Telegram Service
@@ -9,7 +8,7 @@ export class TelegramService {
         return process.env.TELEGRAM_BOT_TOKEN;
     }
 
-    async sendMessage(chatId: string | number, text: string, context: Record<string, any> = {}): Promise<any> {
+    async sendMessage(chatId: string | number, text: string): Promise<any> {
         if (!this.botToken) throw new Error('TELEGRAM_BOT_TOKEN_MISSING');
         try {
             const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
@@ -28,45 +27,46 @@ export class TelegramService {
     }
 
     async processWebhookUpdate(update: any): Promise<void> {
-        const updateId = update.update_id;
         const message = update.message || update.edited_message;
         if (!message || !message.text) return;
 
         const chatId = message.chat.id;
-        let text = message.text.trim();
+        const text = message.text.trim();
+
+        // 🛠️ LOG RAW UPDATE FOR VERCEL LOGS
+        console.log(`📡 [TG WEBHOOK] Chat: ${chatId} | Msg: "${text}"`);
 
         // 1. Resolve UID
         let uid = await this.resolveUidForChat(chatId);
 
-        // 2. Handle Linking (Improved Parsing)
+        // 2. Handle Linking
         if (text.toLowerCase().startsWith('/link')) {
-            // Regex to handle /link email or /link@botname email
-            const parts = text.split(/\s+/);
-            const email = parts.length > 1 ? parts[1].toLowerCase() : null;
-
+            const email = text.split(/\s+/)[1]?.toLowerCase();
             if (email && email.includes('@')) {
-                console.log(`🔗 [TG LINK] Attempt for ${chatId} -> ${email}`);
                 const linkedUid = await this.linkUserByEmail(chatId, email);
                 if (linkedUid) {
-                    await this.sendMessage(chatId, `✅ Success! Your Telegram is now linked to ${email}. You can now view your messages on the dashboard.`);
+                    await this.sendMessage(chatId, `✅ Success! Your Telegram is now linked to ${email}.`);
                     uid = linkedUid;
                 } else {
-                    await this.sendMessage(chatId, `❌ Link failed. No account found for ${email}. Sign up at govindai.vercel.app first.`);
+                    await this.sendMessage(chatId, `❌ Link failed. No account found for ${email}. Please sign up first.`);
                     return;
                 }
             } else {
-                await this.sendMessage(chatId, "📌 Please send: /link your_email@example.com");
+                await this.sendMessage(chatId, "📌 Use: /link your_email@example.com");
                 return;
             }
         }
 
-        if (!uid) return;
+        if (!uid) {
+            console.log(`⚠️ [TG WEBHOOK] Unlinked user ${chatId} ignored.`);
+            return;
+        }
 
         // 3. Save Update
         try {
             const db = getDb();
-            const docId = `update_${updateId}`;
-            const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(docId);
+            const updateId = update.update_id;
+            const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
 
             const doc = await docRef.get();
             if (doc.exists) return;
@@ -82,26 +82,22 @@ export class TelegramService {
                 chatTitle: message.chat.title || message.from.first_name || 'Private Chat',
                 chatType: message.chat.type
             });
-            console.log(`✅ [TG SYNC] Update ${updateId} synced for ${uid}`);
+            console.log(`✅ [TG SYNC] Update ${updateId} synced for UID ${uid}`);
         } catch (err: any) {
             console.error(`❌ [TG SYNC ERR]: ${err.message}`);
         }
     }
 
-    async getUpdates(uid: string, limit: number = 50): Promise<any[]> {
-        try {
-            const db = getDb();
-            const snapshot = await db.collection('telegram_updates')
-                .doc(uid)
-                .collection('updates')
-                .limit(limit)
-                .get();
+    async getUpdates(uid: string): Promise<any[]> {
+        const db = getDb();
+        const snapshot = await db.collection('telegram_updates')
+            .doc(uid)
+            .collection('updates')
+            .orderBy('date', 'desc')
+            .limit(50)
+            .get();
 
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (error: any) {
-            console.error(`❌ [GET UPDATES ERR]: ${error.message}`);
-            throw error; // Throw so handler catch and reports it
-        }
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     private async resolveUidForChat(chatId: number): Promise<string | null> {
