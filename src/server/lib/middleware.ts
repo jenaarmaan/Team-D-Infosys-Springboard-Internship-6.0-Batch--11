@@ -49,14 +49,20 @@ export const withMiddleware = (
                 return res.status(401).json({ success: false, data: null, error: { code: 'INVALID_TOKEN', message: 'Token missing' } });
             }
 
-            console.log("🔍 [MIDDLEWARE] Verifying ID Token...");
+            console.log("🔍 [MIDDLEWARE] Verifying ID Token (with 5s timeout)...");
             const firebaseAuth = getAuth();
             if (!firebaseAuth) {
                 console.error("❌ [MIDDLEWARE] Firebase Auth service is NULL");
                 throw new Error("AUTH_SERVICE_UNAVAILABLE");
             }
 
-            const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+            // Racing verification with a timeout to prevent regional hangs
+            const verificationPromise = firebaseAuth.verifyIdToken(idToken);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 5000)
+            );
+
+            const decodedToken = await Promise.race([verificationPromise, timeoutPromise]) as any;
             console.log("✅ [MIDDLEWARE] Token Verified. UID:", decodedToken.uid);
             const uid = decodedToken.uid;
 

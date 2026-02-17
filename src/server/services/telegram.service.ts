@@ -143,12 +143,14 @@ export class TelegramService {
         const db = getDb();
         if (!db) return [];
         try {
+            console.log(`🔍 [TELEGRAM SERVICE] Fetching updates for UID: ${uid} (limit: ${limit})`);
             const snapshot = await db.collection('telegram_updates')
                 .doc(uid)
                 .collection('updates')
-                .orderBy('date', 'desc')
                 .limit(limit)
                 .get();
+
+            console.log(`✅ [TELEGRAM SERVICE] Found ${snapshot.size} updates.`);
 
             return snapshot.docs.map(doc => ({
                 id: doc.id,
