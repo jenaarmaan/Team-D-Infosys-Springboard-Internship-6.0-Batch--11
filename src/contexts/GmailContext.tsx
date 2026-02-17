@@ -325,6 +325,9 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { getGmailClient } = await import("@/lib/google/gmailClient");
       const gmail = await getGmailClient();
+      if (!gmail?.messages) {
+        throw new Error("GAPI Gmail client or messages resource not available");
+      }
       const response = await gmail.messages.list({
         maxResults: 5,
         q: query

@@ -27,6 +27,9 @@ export async function fetchInbox(limit = 5) {
   // Fallback: Direct GAPI Fetch
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
     const response = await gmail.messages.list({
       maxResults: limit,
       q: 'label:INBOX'
@@ -79,6 +82,9 @@ export async function fetchUnreadInbox(limit = 10) {
   // Fallback: Direct GAPI Fetch
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
     const response = await gmail.messages.list({
       maxResults: limit,
       q: 'is:unread label:INBOX'
@@ -134,6 +140,9 @@ export async function readEmail(messageId: string) {
   // Fallback: Direct GAPI Fetch
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
     const response = await gmail.messages.get({ id: messageId, format: 'full' });
     const data = response.result;
     const payload = data.payload;
@@ -185,6 +194,9 @@ export async function markEmailAsRead(messageId: string) {
   // Fallback: Direct GAPI Fetch
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
     await gmail.messages.batchModify({
       ids: [messageId],
       removeLabelIds: ['UNREAD']

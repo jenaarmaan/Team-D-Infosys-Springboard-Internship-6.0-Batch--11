@@ -18,6 +18,10 @@ export async function sendEmail(to: string, subject: string, body: string) {
   // Fallback: Direct GAPI Send
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
+
     const rawMessage = [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -58,6 +62,9 @@ export async function replyToEmail(threadId: string, to: string, subject: string
   // Fallback: Direct GAPI Reply
   try {
     const gmail = await getGmailClient();
+    if (!gmail?.messages) {
+      throw new Error("GAPI Gmail client or messages resource not available");
+    }
     const rawMessage = [
       `To: ${to}`,
       `Subject: Re: ${subject}`,

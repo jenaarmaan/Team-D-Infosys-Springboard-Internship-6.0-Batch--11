@@ -1,15 +1,14 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { withMiddleware } from '../src/server/lib/middleware';
+import { tokenService } from '../src/server/services/token.service';
+import { gmailService } from '../src/server/services/gmail.service';
 
 /**
  * [ALL] /api/v1/gmail
  * Consolidated Gmail API Handler - HARDENED VERSION
- * Uses dynamic imports to prevent top-level initialization crashes and speed up cold starts.
  */
 export default async (req: VercelRequest, res: VercelResponse) => {
     try {
-        // 1. Dynamic Import Middleware
-        const { withMiddleware } = await import('../src/server/lib/middleware');
-
         return await withMiddleware(async (req: any, res: VercelResponse) => {
             const { action } = req.query;
             const uid = req.uid;
@@ -17,10 +16,6 @@ export default async (req: VercelRequest, res: VercelResponse) => {
             console.log(`📨 [GMAIL API] Action: ${action}, UID: ${uid}`);
 
             try {
-                // 2. Dynamic Import Services only when needed
-                const { tokenService } = await import('../src/server/services/token.service');
-                const { gmailService } = await import('../src/server/services/gmail.service');
-
                 console.log(`🔑 [GMAIL API] Fetching token for UID: ${uid}`);
                 const accessToken = await tokenService.getValidToken(uid);
                 console.log(`✅ [GMAIL API] Token acquired.`);

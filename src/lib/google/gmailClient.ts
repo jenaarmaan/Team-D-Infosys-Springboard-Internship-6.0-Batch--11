@@ -111,11 +111,18 @@ export async function getGmailClient(): Promise<any> {
           ],
         });
 
+        // 🔄 Force load the Gmail client to ensure gapi.client.gmail exists
+        await (window as any).gapi.client.load('gmail', 'v1');
+
         (window as any).gapi.client.setToken({
           access_token: accessToken,
         });
 
-        resolve((window as any).gapi.client.gmail);
+        const gmail = (window as any).gapi.client.gmail;
+        if (!gmail) {
+          throw new Error("GAPI Gmail client not found after init/load");
+        }
+        resolve(gmail);
       } catch (err) {
         console.error("❌ Failed to initialize Gmail client", err);
         reject(err);
