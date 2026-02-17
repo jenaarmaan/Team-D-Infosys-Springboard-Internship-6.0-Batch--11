@@ -2,22 +2,50 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Super-Resilient Telegram API Handler
- * Uses dynamic imports to keep warm start weight low.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action } = req.query;
-    console.log(`📡 [TG API] -> ${action || 'webhook'}`);
+    const host = req.headers.host || 'govindai.vercel.app';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
 
-    if (req.method !== 'POST') return res.status(405).json({ success: false, error: { message: 'POST only' } });
+    console.log(`📡 [TG API] -> ${req.method} ${action || 'webhook'} | Origin: ${host}`);
 
-    // 1. FAST STATUS (NO DB)
+    if (req.method !== 'POST') return res.status(405).json({ success: false, error: { message: 'POST Required' } });
+
+    // 1. STATUS & AUTO-REPAIR
     if (action === 'status') {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+        let repairStatus = "not_triggered";
+
+        if (botToken && !host.includes('localhost')) {
+            try {
+                const webhookUrl = `${protocol}://${host}/api/v1/telegram`;
+                console.log(`🔧 [REPAIR] Setting webhook to ${webhookUrl}`);
+
+                const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: webhookUrl,
+                        secret_token: secret || undefined,
+                        allowed_updates: ['message', 'edited_message']
+                    })
+                });
+                const data = await tgRes.json();
+                repairStatus = data.ok ? "Success" : `Failed: ${data.description}`;
+            } catch (err: any) {
+                repairStatus = `Error: ${err.message}`;
+            }
+        }
+
         return res.status(200).json({
             success: true,
             data: {
-                hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN,
+                hasBotToken: !!botToken,
                 region: process.env.VERCEL_REGION || 'local',
-                serverTime: new Date().toISOString()
+                webhookAutoRepairStatus: repairStatus,
+                host
             }
         });
     }
@@ -28,11 +56,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2. INCOMING WEBHOOK (NO AUTH)
         if (!action || action === 'webhook') {
-            const secret = req.headers['x-telegram-bot-api-secret-token'];
-            if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-                return res.status(401).send('Unauthorized');
+            const secretToken = req.headers['x-telegram-bot-api-secret-token'];
+            const expectedToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+            // Log secret check (masked)
+            if (expectedToken) {
+                console.log(`🔐 [AUTH] Secret Check: Received=${!!secretToken}, Expected=${!!expectedToken}`);
+                if (secretToken !== expectedToken) {
+                    console.warn("🚫 [AUTH] Secret mismatch. Webhook rejected.");
+                    return res.status(401).send('Unauthorized');
+                }
             }
+
             const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+            if (!update) throw new Error("EMPTY_BODY");
+
             await service.processWebhookUpdate(update);
             return res.status(200).send('OK');
         }
@@ -43,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return await withMiddleware(async (authReq: any, authRes: VercelResponse) => {
             switch (action) {
                 case 'send': {
-                    const result = await service.sendMessage(authReq.body.chatId, authReq.body.text, { uid: authReq.uid });
+                    const result = await service.sendMessage(authReq.body.chatId, authReq.body.text);
                     return authRes.status(200).json({ success: true, data: result });
                 }
                 case 'updates': {
@@ -57,11 +95,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } catch (err: any) {
         console.error("🛑 [API FATAL]:", err.message);
-        return res.status(200).json({ // Keep 200 to bypass Vercel 500 pages but flag failure
+        return res.status(200).json({
             success: false,
             error: {
                 message: err.message,
-                debug_stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+                code: "INTERNAL_CATCH",
+                env_check: {
+                    hasSA: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+                    hasToken: !!process.env.TELEGRAM_BOT_TOKEN
+                }
             }
         });
     }
