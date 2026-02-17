@@ -1,7 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { TelegramService } from '../src/server/services/telegram.service';
+import { withMiddleware } from '../src/server/lib/middleware';
 
 /**
  * Super-Resilient Telegram API Handler
+ * Now uses static imports for guaranteed bundling in Vercel.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action } = req.query;
@@ -51,7 +54,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { TelegramService } = await import('../src/server/services/telegram.service');
         const service = new TelegramService();
 
         // 2. INCOMING WEBHOOK (NO AUTH)
@@ -59,9 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const secretToken = req.headers['x-telegram-bot-api-secret-token'];
             const expectedToken = process.env.TELEGRAM_WEBHOOK_SECRET;
 
-            // Log secret check (masked)
             if (expectedToken) {
-                console.log(`🔐 [AUTH] Secret Check: Received=${!!secretToken}, Expected=${!!expectedToken}`);
                 if (secretToken !== expectedToken) {
                     console.warn("🚫 [AUTH] Secret mismatch. Webhook rejected.");
                     return res.status(401).send('Unauthorized');
@@ -76,8 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 3. PROTECTED ACTIONS (WITH AUTH)
-        const { withMiddleware } = await import('../src/server/lib/middleware');
-
         return await withMiddleware(async (authReq: any, authRes: VercelResponse) => {
             switch (action) {
                 case 'send': {

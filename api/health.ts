@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import * as admin from 'firebase-admin';
+import { getFirebaseAdmin } from '../src/server/lib/clients/firebase.admin';
 
 /**
  * Enterprise Health & Diagnostic Endpoint
@@ -18,7 +18,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     try {
-        const { getFirebaseAdmin } = await import('../src/server/lib/clients/firebase.admin');
         const start = Date.now();
         const app = getFirebaseAdmin();
         const db = app.firestore();
@@ -53,12 +52,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             status: "error",
             message: e.message,
             code: e.code,
-            stack: e.stack?.split('\n')[1] // Top frame
+            stack: e.stack?.split('\n').slice(0, 2).join('\n')
         };
     }
 
     return res.status(200).json({
-        success: diagnostics.db && diagnostics.db.status === "connected",
+        success: !!(diagnostics.db && diagnostics.db.status === "connected"),
         data: diagnostics
     });
 }
