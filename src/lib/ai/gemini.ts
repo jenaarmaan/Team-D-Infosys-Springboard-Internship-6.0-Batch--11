@@ -18,13 +18,37 @@ export async function callGemini(prompt: string): Promise<string> {
         throw new Error("Security Violation: Raw sensitive data cannot be sent to Gemini. Please use callGeminiSecurely.");
     }
 
-    const result = await apiClient.post<{ response: string }>("/api/v1/ai/gemini", { prompt });
-
-    if (!result.success) {
-        throw new Error(result.error?.message || "Gemini API call failed");
+    try {
+        console.log("[AI] Attempting backend Gemini call...");
+        const result = await apiClient.post<{ response: string }>("/api/v1/ai/gemini", { prompt });
+        if (result.success) return result.data.response;
+        console.warn("[AI] Backend call failed, falling back to frontend direct call.");
+    } catch (err) {
+        console.error("[AI] Backend call crashed, falling back to frontend direct call.", err);
     }
 
-    return result.data.response;
+    // Fallback: Direct Frontend Call
+    try {
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY || (window as any).apiKey;
+
+        if (!apiKey) {
+            throw new Error("Gemini API key not found for fallback.");
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const systemInstruction = "You are Govind, a secure and controlled voice assistant. Your responses must be concise and optimized for text-to-speech output.";
+        const fullPrompt = `${systemInstruction}\n\nUser Request: ${prompt}`;
+
+        const result = await model.generateContent(fullPrompt);
+        const response = result.response.text();
+        return response;
+    } catch (fallbackErr) {
+        console.error("[AI] Fallback Gemini call failed:", fallbackErr);
+        throw fallbackErr;
+    }
 }
 
 /**
