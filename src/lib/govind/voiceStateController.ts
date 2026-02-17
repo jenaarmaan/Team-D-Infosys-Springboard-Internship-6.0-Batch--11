@@ -23,8 +23,8 @@ export type PauseReason =
 let recognition: any | null = null;
 let micState: MicState = "IDLE";
 const pauseReasons = new Set<PauseReason>();
-let pausedByTTS = false;
 let restartInProgress = false;
+let isStarting = false; // Lock to prevent overlapping .start() calls
 
 // 🔄 Re-initialization Hook
 let reinitCallback: (() => void) | null = null;
@@ -33,17 +33,17 @@ export const setVoiceReinitCallback = (cb: () => void) => {
 };
 
 // Deadlock prevention
-const DEADLOCK_TIMEOUT_MS = 10000;
+const DEADLOCK_TIMEOUT_MS = 12000;
 let deadlockTimer: ReturnType<typeof setTimeout> | null = null;
 
 const resetDeadlockTimer = () => {
   if (deadlockTimer) clearTimeout(deadlockTimer);
   deadlockTimer = setTimeout(() => {
-    if (pauseReasons.size > 0 || restartInProgress) {
+    if (pauseReasons.size > 0 || restartInProgress || isStarting) {
       console.warn("[VOICE] Deadlock watchdog triggered — forcing recovery");
       pauseReasons.clear();
       restartInProgress = false;
-      pausedByTTS = false;
+      isStarting = false;
       safeStart("deadlock-recovery");
     }
   }, DEADLOCK_TIMEOUT_MS);
@@ -53,7 +53,7 @@ export const forceUnlockMic = () => {
   console.warn("[VOICE] forceUnlockMic — clearing all locks");
   pauseReasons.clear();
   restartInProgress = false;
-  pausedByTTS = false;
+  isStarting = false;
   if (deadlockTimer) clearTimeout(deadlockTimer);
   safeStart("force-unlock");
 };
@@ -70,7 +70,8 @@ let currentRestartTimer: ReturnType<typeof setTimeout> | null = null;
 
 const safeStart = (source: string) => {
   if (!recognition) return;
-  if (micState === "LISTENING") {
+  if (micState === "LISTENING" || isStarting) {
+    console.log(`[VOICE] ${source} — start ignored (state: ${micState}, starting: ${isStarting})`);
     return;
   }
   if (pauseReasons.size > 0) {
@@ -79,26 +80,27 @@ const safeStart = (source: string) => {
   }
 
   const now = Date.now();
-  // Prevent rapid-fire starts (min 500ms apart)
-  if (now - lastStartTime < 800) {
+  // Prevent rapid-fire starts (min 1000ms apart for hardware sync)
+  if (now - lastStartTime < 1000) {
     return;
   }
 
   // If we just had an 'aborted' error, wait significantly longer
-  if (lastErrorType === 'aborted' && now - lastErrorTime < 3000) {
+  if (lastErrorType === 'aborted' && now - lastErrorTime < 4000) {
     console.log(`[VOICE] ${source} — backing off (abort cooling)`);
     if (currentRestartTimer) clearTimeout(currentRestartTimer);
-    currentRestartTimer = setTimeout(() => safeStart(`${source}-retry`), 2000);
+    currentRestartTimer = setTimeout(() => safeStart(`${source}-retry`), 2500);
     return;
   }
 
   try {
     if (currentRestartTimer) clearTimeout(currentRestartTimer);
+    isStarting = true;
     recognition.start();
     lastStartTime = now;
-    micState = "LISTENING";
     console.log(`[VOICE] Mic opened (${source})`);
   } catch (err: any) {
+    isStarting = false;
     if (err.name === 'InvalidStateError') {
       console.log("[VOICE] Attempted start in InvalidState — aligning state to LISTENING");
       micState = "LISTENING";
@@ -107,39 +109,47 @@ const safeStart = (source: string) => {
       micState = "IDLE";
       errorBackoffCount++;
     }
-    restartInProgress = false;
   }
 };
 
 export const initVoiceRecognition = (rec: any) => {
-  // Clear previous instance if any (Hard Kill)
   if (recognition && recognition !== rec) {
     console.log("[VOICE] Swapping recognition object — stopping old one");
-    try { recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch (e) { }
+    try {
+      recognition.onstart = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onresult = null;
+      recognition.stop();
+    } catch (e) { }
   }
 
   recognition = rec;
   micState = "IDLE";
-  // We dont clear pauseReasons here to preserve state across re-inits
+  isStarting = false;
 
   recognition.onstart = () => {
     micState = "LISTENING";
+    isStarting = false;
     restartInProgress = false;
     lastErrorType = "";
 
-    // 🔥 Stability Window: Only reset backoff if it stays healthy for 5 seconds
+    // 🔥 Stability Window: Only reset backoff if it stays healthy for 8 seconds
+    // We use a longer window (8s) because aborted errors often happen after a few seconds of silence
     setTimeout(() => {
       if (micState === "LISTENING") {
-        console.log("[VOICE] Stability target reached — resetting backoff count");
+        console.log("[VOICE] Stability target reached (8s) — resetting backoff");
         errorBackoffCount = 0;
       }
-    }, 5000);
+    }, 8000);
 
     if (currentRestartTimer) clearTimeout(currentRestartTimer);
   };
 
   recognition.onend = () => {
     console.log("[VOICE] onend received. State:", micState, "Reasons:", Array.from(pauseReasons));
+
+    isStarting = false;
 
     if (micState !== "PAUSED_BY_REASON") {
       micState = "IDLE";
@@ -153,10 +163,10 @@ export const initVoiceRecognition = (rec: any) => {
     restartInProgress = true;
     resetDeadlockTimer();
 
-    // Calculate backoff: start at 500ms, increase on errors, max 12s
-    let delay = lastErrorType === 'aborted' ? 2500 : 500;
+    // Calculate backoff: start at 1000ms, increase on errors, max 15s
+    let delay = lastErrorType === 'aborted' ? 3000 : 1000;
     if (errorBackoffCount > 0) {
-      delay = Math.min(delay * Math.pow(1.6, errorBackoffCount), 12000);
+      delay = Math.min(delay * Math.pow(1.8, errorBackoffCount), 15000);
       console.log(`[VOICE] Backing off restart (count: ${errorBackoffCount}, delay: ${Math.round(delay)}ms)`);
     }
 
@@ -168,6 +178,7 @@ export const initVoiceRecognition = (rec: any) => {
   };
 
   recognition.onerror = (event: any) => {
+    isStarting = false;
     lastErrorType = event.error;
     lastErrorTime = Date.now();
     console.error("[VOICE] Mic error:", event.error, event.message);
@@ -175,11 +186,11 @@ export const initVoiceRecognition = (rec: any) => {
     errorBackoffCount++;
 
     // 💣 RE-INITIALIZATION TRIGGER
-    // If we hit 4 aborted errors in a row, the browser object is likely wedged.
-    if (errorBackoffCount >= 4 && reinitCallback) {
-      console.warn("[VOICE] 4 consecutive errors — Triggering Total Re-initialization");
+    // If we hit 3 errors in a row (reduced from 4 for faster recovery)
+    if (errorBackoffCount >= 3 && reinitCallback) {
+      console.warn("[VOICE] Persistent error — Triggering Re-initialization");
       reinitCallback();
-      errorBackoffCount = 0; // Reset to avoid loop
+      errorBackoffCount = 0;
       return;
     }
 
@@ -210,15 +221,12 @@ export const pauseListening = (reason: PauseReason) => {
   if (!recognition) return;
 
   pauseReasons.add(reason);
-  if (reason === "TTS") {
-    pausedByTTS = true;
-  }
-
   resetDeadlockTimer();
 
   if (micState === "LISTENING") {
     try {
-      recognition.stop();
+      // Use abort() for immediate halt to prevent 'onend' processing old data
+      recognition.abort();
     } catch { }
     micState = "PAUSED_BY_REASON";
     console.log("[VOICE] Paused by", reason);
@@ -237,10 +245,6 @@ export const resumeListening = (reason: PauseReason) => {
   if (pauseReasons.size > 0) return;
   if (!recognition) return;
 
-  if (reason === "TTS") {
-    pausedByTTS = false;
-  }
-
   if (deadlockTimer) clearTimeout(deadlockTimer);
   safeStart("resume");
 };
@@ -256,34 +260,12 @@ export const stopListening = () => {
   try {
     pauseReasons.clear();
     restartInProgress = false;
-    recognition.stop();
+    isStarting = false;
+    recognition.abort();
   } catch { }
 
   micState = "IDLE";
   console.log("[VOICE] Listening stopped");
-};
-
-/* ======================================================
-   🟢 READY AFTER TTS
-   ====================================================== */
-
-export const setReadyForCommand = () => {
-  resumeListening("TTS");
-};
-
-/* ======================================================
-   🌅 WAKE RESUME (GLOBAL_EXIT)
-   ====================================================== */
-
-export const resumeAfterWake = () => {
-  if (pauseReasons.has("GLOBAL_EXIT")) {
-    pauseReasons.delete("GLOBAL_EXIT");
-    console.log("[VOICE] GLOBAL_EXIT cleared on wake");
-  }
-
-  if (pauseReasons.size === 0) {
-    safeStart("wake-resume");
-  }
 };
 
 /* ======================================================
@@ -301,14 +283,14 @@ export const getMicState = () => micState;
 export const resetVoiceController = () => {
   if (deadlockTimer) clearTimeout(deadlockTimer);
   try {
-    recognition?.stop();
+    recognition?.abort();
   } catch { }
 
   recognition = null;
   micState = "IDLE";
   pauseReasons.clear();
   restartInProgress = false;
-  pausedByTTS = false;
+  isStarting = false;
 
   console.log("[VOICE] Controller hard reset");
 };

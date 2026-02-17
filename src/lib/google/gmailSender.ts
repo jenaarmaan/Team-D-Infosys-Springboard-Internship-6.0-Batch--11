@@ -1,34 +1,87 @@
 import { apiClient } from "@/api/client";
-import { getValidAccessToken } from "./gmailClient";
+import { getValidAccessToken, getGmailClient } from "./gmailClient";
 
 /**
- * Send new email via secure proxy
+ * Send new email via secure proxy with fallback
  */
 export async function sendEmail(to: string, subject: string, body: string) {
-  console.log("[GMAIL] Sending email via proxy");
+  console.log("[GMAIL] Sending email...");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.post<any>("/api/v1/gmail?action=send", { to, subject, body }, { googleToken: token });
-
-  if (!result.success) {
-    throw new Error(result.error?.message || "Failed to send email");
+  try {
+    const result = await apiClient.post<any>("/api/v1/gmail?action=send", { to, subject, body }, { googleToken: token });
+    if (result.success) return result.data;
+  } catch (err) {
+    console.error("[GMAIL] Backend send failed, falling back.", err);
   }
 
-  return result.data;
+  // Fallback: Direct GAPI Send
+  try {
+    const gmail = await getGmailClient();
+    const rawMessage = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      '',
+      body
+    ].join('\r\n');
+
+    const encodedMessage = btoa(unescape(encodeURIComponent(rawMessage)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const response = await gmail.messages.send({
+      resource: { raw: encodedMessage }
+    });
+    return response.result;
+  } catch (fallbackErr) {
+    console.error("[GMAIL] Fallback send failed:", fallbackErr);
+    throw fallbackErr;
+  }
 }
 
 /**
- * Reply to an existing email via secure proxy
+ * Reply to an existing email via secure proxy with fallback
  */
 export async function replyToEmail(threadId: string, to: string, subject: string, body: string) {
-  console.log("[GMAIL] Replying to email via proxy");
+  console.log("[GMAIL] Replying to email...");
   const token = await getValidAccessToken();
 
-  const result = await apiClient.post<any>("/api/v1/gmail?action=reply", { threadId, to, subject, body }, { googleToken: token });
-
-  if (!result.success) {
-    throw new Error(result.error?.message || "Failed to reply to email");
+  try {
+    const result = await apiClient.post<any>("/api/v1/gmail?action=reply", { threadId, to, subject, body }, { googleToken: token });
+    if (result.success) return result.data;
+  } catch (err) {
+    console.error("[GMAIL] Backend reply failed, falling back.", err);
   }
 
-  return result.data;
+  // Fallback: Direct GAPI Reply
+  try {
+    const gmail = await getGmailClient();
+    const rawMessage = [
+      `To: ${to}`,
+      `Subject: Re: ${subject}`,
+      `In-Reply-To: ${threadId}`,
+      `References: ${threadId}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      '',
+      body
+    ].join('\r\n');
+
+    const encodedMessage = btoa(unescape(encodeURIComponent(rawMessage)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const response = await gmail.messages.send({
+      resource: {
+        raw: encodedMessage,
+        threadId: threadId
+      }
+    });
+    return response.result;
+  } catch (fallbackErr) {
+    console.error("[GMAIL] Fallback reply failed:", fallbackErr);
+    throw fallbackErr;
+  }
 }

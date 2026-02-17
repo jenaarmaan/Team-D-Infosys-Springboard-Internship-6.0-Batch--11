@@ -30,7 +30,7 @@ const finalizeTTS = (resolve: () => void) => {
 
   setTimeout(() => {
     resumeListening("TTS");
-  }, 1500);
+  }, 2000);
 
   resolve();
 };

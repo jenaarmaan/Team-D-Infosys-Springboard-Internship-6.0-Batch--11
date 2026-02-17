@@ -290,50 +290,68 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    try {
-      // 1. Map section to query
-      let query = "is:unread in:inbox";
-      if (currentSection === "starred") query = "is:starred";
-      else if (currentSection === "sent") query = "in:sent";
-      else if (currentSection === "drafts") query = "in:draft";
-      else if (currentSection === "trash") query = "in:trash";
-      else if (currentSection === "spam") query = "in:spam";
-      else if (currentSection === "inbox") query = "in:inbox";
+    // 1. Map section to query
+    let query = "is:unread in:inbox";
+    if (currentSection === "starred") query = "is:starred";
+    else if (currentSection === "sent") query = "in:sent";
+    else if (currentSection === "drafts") query = "in:draft";
+    else if (currentSection === "trash") query = "in:trash";
+    else if (currentSection === "spam") query = "in:spam";
+    else if (currentSection === "inbox") query = "in:inbox";
 
+    try {
       // 2. Fetch via Secure Proxy
+      console.log("[GMAIL] Attempting backend fetch for section:", currentSection);
       const result = await apiClient.get<any>(
         `/api/v1/gmail?action=list&limit=5&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
 
-      console.log("[GMAIL][OAUTH] RAW RESPONSE:", result);
-
-      if (!result.success) {
-        throw new Error(result.error?.message || "FETCH_FAILED");
+      if (result.success) {
+        const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
+        setInboxEmails((Array.isArray(messages) ? messages : []).map((email: any) => ({
+          ...email,
+          date: new Date(email.date)
+        })));
+        setLoading(false);
+        return;
       }
-
-      const messages = (result as any)?.data?.messages ?? (result as any)?.messages ?? [];
-      if (!Array.isArray(messages)) {
-        console.warn("[GMAIL][OAUTH] Unexpected response shape:", result);
-      }
-
-      const safeMessages = Array.isArray(messages) ? messages : [];
-      console.log("[GMAIL][OAUTH] messages array length:", safeMessages.length);
-
-      // Sync to state
-      setInboxEmails(safeMessages.map((email: any) => ({
-        ...email,
-        date: new Date(email.date)
-      })));
-
-      setLoading(false);
+      console.warn("[GMAIL] Backend fetch failed, falling back to frontend direct fetch.");
     } catch (err: any) {
-      console.error("[GMAIL] Fetch failed", err);
-      if (err.message === "AUTH_ERROR") {
-        setError("AUTH_ERROR");
-      } else {
-        setError("Failed to fetch Gmail inbox");
-      }
+      console.error("[GMAIL] Backend fetch crashed, falling back to frontend direct fetch.", err);
+    }
+
+    // Fallback: Direct GAPI Fetch
+    try {
+      const { getGmailClient } = await import("@/lib/google/gmailClient");
+      const gmail = await getGmailClient();
+      const response = await gmail.messages.list({
+        maxResults: 5,
+        q: query
+      });
+
+      const messages = response.result.messages || [];
+      const emails = await Promise.all(
+        messages.map(async (msg: any) => {
+          const detail = await gmail.messages.get({ id: msg.id, format: 'metadata' });
+          const headers = detail.result.payload.headers || [];
+          const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+
+          return {
+            id: msg.id,
+            threadId: detail.result.threadId,
+            from: getHeader('From'),
+            subject: getHeader('Subject'),
+            date: new Date(getHeader('Date')),
+            snippet: detail.result.snippet,
+            isUnread: detail.result.labelIds?.includes('UNREAD')
+          };
+        })
+      );
+      setInboxEmails(emails.filter(Boolean));
+    } catch (fallbackErr) {
+      console.error("[GMAIL] Fallback fetch failed:", fallbackErr);
+      setError("Failed to fetch Gmail inbox");
     } finally {
       setLoading(false);
     }

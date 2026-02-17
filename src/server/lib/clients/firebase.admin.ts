@@ -20,7 +20,8 @@ export function getFirebaseAdmin(): admin.app.App {
         const projectIdFromEnv = process.env.projectId ||
             process.env.PROJECT_ID ||
             process.env.FIREBASE_PROJECT_ID ||
-            process.env.VITE_FIREBASE_PROJECT_ID;
+            process.env.VITE_FIREBASE_PROJECT_ID ||
+            process.env.VITE_PROJECT_ID;
 
         console.log("🔥 [FIREBASE ADMIN] Initializing Singleton (Production/Serverless)", {
             hasSaKey: !!serviceAccountKey,
