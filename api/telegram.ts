@@ -36,18 +36,26 @@ async function webhookHandler(req: VercelRequest, res: VercelResponse) {
     const secretToken = req.headers['x-telegram-bot-api-secret-token'];
     const expectedToken = process.env.TELEGRAM_WEBHOOK_SECRET;
 
+    console.log(`🤖 [TELEGRAM WEBHOOK] Headers:`, JSON.stringify(req.headers));
+
     if (expectedToken && secretToken !== expectedToken) {
-        logger.warn('Unauthorized Telegram Webhook attempt', { senderIp: req.headers['x-forwarded-for'] });
+        console.warn('🚫 [TELEGRAM WEBHOOK] Unauthorized: Secret token mismatch');
         return res.status(401).send('Unauthorized');
     }
 
-    if (!expectedToken) {
-        logger.warn('Telegram Webhook running without TELEGRAM_WEBHOOK_SECRET - Production risk');
-    }
-
     try {
-        console.log(`🤖 [TELEGRAM WEBHOOK] Incoming update...`);
-        const update = req.body;
+        let update = req.body;
+        if (typeof update === 'string') {
+            try { update = JSON.parse(update); } catch (e) { }
+        }
+
+        console.log(`🤖 [TELEGRAM WEBHOOK] Update Body:`, JSON.stringify(update));
+
+        if (!update || !update.update_id) {
+            console.warn("⚠️ [TELEGRAM WEBHOOK] Invalid update received (no update_id)");
+            return res.status(200).send('Invalid Update');
+        }
+
         await telegramService.processWebhookUpdate(update);
         return res.status(200).send('OK');
     } catch (error: any) {
@@ -101,14 +109,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(200).json({
             success: true,
-            config: {
+            data: {
                 hasBotToken: !!botToken,
                 hasWebhookSecret: !!process.env.TELEGRAM_WEBHOOK_SECRET,
                 botTokenPrefix: botToken ? botToken.substring(0, 5) : 'none',
                 region,
                 envKeysFound: envKeys,
                 webhookAutoRepairStatus: webhookStatus
-            }
+            },
+            error: null
         });
     }
 
@@ -118,8 +127,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (action === 'updates') {
         return withMiddleware(async (authenticatedReq: AuthenticatedRequest, response: VercelResponse) => {
-            const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-            const updates = await telegramService.getUpdates(authenticatedReq.uid, limit);
+            const limit = req.query.limit || req.body?.limit || 50;
+            const parsedLimit = parseInt(limit as string);
+            const updates = await telegramService.getUpdates(authenticatedReq.uid, isNaN(parsedLimit) ? 50 : parsedLimit);
             return response.status(200).json({ success: true, data: updates, error: null });
         })(req, res);
     }

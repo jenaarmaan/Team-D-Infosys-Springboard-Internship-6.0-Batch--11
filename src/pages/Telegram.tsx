@@ -1,15 +1,16 @@
-import React, { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getTelegramClient } from "@/lib/telegram/telegramClient";
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, Users } from 'lucide-react';
+import { Send, Bot, Users, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useTelegram } from '@/contexts/TelegramContext';
 import { useGovind } from '@/contexts/GovindContext';
 import { TelegramChatModal } from '@/components/telegram/TelegramChatModal';
+import { cn } from '@/lib/utils';
 
 import { apiClient } from '@/api/client';
 
@@ -26,12 +27,18 @@ const Telegram = () => {
         error
     } = useTelegram();
 
+    const [backendStatus, setBackendStatus] = useState<any>(null);
+
     useEffect(() => {
         // Diagnostic: Check backend status
-        apiClient.post('/api/v1/telegram?action=status', {}).then(res => {
+        apiClient.post<any>('/api/v1/telegram?action=status', {}).then(res => {
             console.log("🛠️ [TELEGRAM DIAGNOSTIC] Backend Status:", res);
+            if (res.success && res.data) {
+                setBackendStatus(res.data);
+            }
         }).catch(err => {
             console.error("🛠️ [TELEGRAM DIAGNOSTIC] Failed to check status:", err);
+            setBackendStatus({ error: true });
         });
     }, []);
 
@@ -58,7 +65,7 @@ const Telegram = () => {
                 </p>
                 <div className="flex gap-4">
                     <Button variant="outline" onClick={() => navigate("/dashboard")}>Return to Dashboard</Button>
-                    <Button className="bg-[#0088cc] hover:bg-[#0088cc]/90 text-white">Retry Connection</Button>
+                    <Button className="bg-[#0088cc] hover:bg-[#0088cc]/90 text-white" onClick={() => window.location.reload()}>Retry Connection</Button>
                 </div>
             </div>
         );
@@ -75,12 +82,38 @@ const Telegram = () => {
                             Telegram Assistant
                         </h1>
                         <p className="text-muted-foreground italic">
-                            Voice-controlled messaging at your command.
+                            Voice-controlled messaging for <strong>@voice_mail_ai_bot</strong>.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-medium">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        LIVE PIPELINE ACTIVE
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {backendStatus ? (
+                            <>
+                                <div className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
+                                    backendStatus.hasBotToken ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-red-500/10 border-red-500/20 text-red-500"
+                                )}>
+                                    {backendStatus.hasBotToken ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                    BOT {backendStatus.hasBotToken ? "CONNECTED" : "OFFLINE"}
+                                </div>
+                                <div className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
+                                    backendStatus.webhookAutoRepairStatus === "Success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                                )}>
+                                    <Activity className="w-3 h-3" />
+                                    WEBHOOK {backendStatus.webhookAutoRepairStatus === "Success" ? "ACTIVE" : "REPAIRING"}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-500/10 border border-slate-500/20 text-slate-500 text-xs font-medium">
+                                <Activity className="w-3 h-3 animate-spin" />
+                                CHECKING PIPELINE...
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0088cc]/10 border border-[#0088cc]/20 text-[#0088cc] text-xs font-medium">
+                            <div className="w-2 h-2 rounded-full bg-[#0088cc] animate-pulse" />
+                            LIVE SYNC
+                        </div>
                     </div>
                 </div>
 
@@ -141,7 +174,7 @@ const Telegram = () => {
                                                 <div className="space-y-4 text-left">
                                                     <div className="flex gap-3 items-start">
                                                         <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</div>
-                                                        <p className="text-xs text-white/80">Open your Telegram app and search for <strong>Voice Mail Assistant</strong></p>
+                                                        <p className="text-xs text-white/80">Open <a href="https://t.me/voice_mail_ai_bot" target="_blank" className="text-[#0088cc] underline">@voice_mail_ai_bot</a> on Telegram</p>
                                                     </div>
                                                     <div className="flex gap-3 items-start">
                                                         <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</div>
