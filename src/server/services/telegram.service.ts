@@ -113,6 +113,9 @@ export class TelegramService {
             }
 
             // 3. Sink to Firestore
+            const chatTitle = message.chat.title || `${message.chat.first_name || ''} ${message.chat.last_name || ''}`.trim();
+            const chatType = message.chat.type; // 'private', 'group', 'supergroup' or 'channel'
+
             await docRef.set({
                 processedAt: new Date().toISOString(),
                 chatId: chatId,
@@ -120,7 +123,9 @@ export class TelegramService {
                 senderName: message.from.first_name,
                 text: message.text,
                 date: message.date,
-                uid: uid
+                uid: uid,
+                chatTitle,
+                chatType
             });
 
             console.log(`📡 [TELEGRAM WEBHOOK] Update ${updateId} pushed to Firestore for UID ${uid}`);

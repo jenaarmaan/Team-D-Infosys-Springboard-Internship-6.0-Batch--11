@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const webhookUrl = `https://${host}/api/v1/telegram`;
                 console.log(`🔧 [TELEGRAM AUTO-REPAIR] Setting webhook to: ${webhookUrl}`);
 
-                const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+                const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         secret_token: process.env.TELEGRAM_WEBHOOK_SECRET || undefined
                     })
                 });
-                const data = await res.json();
+                const data = await tgRes.json();
                 webhookStatus = data.ok ? "Success" : `Failed: ${data.description}`;
             } catch (err: any) {
                 webhookStatus = `Error: ${err.message}`;

@@ -98,10 +98,23 @@ export class TelegramClient {
   }
 
   /**
-   * Deep Sync: Returns chats and their recent messages in one go
+   * Deep Sync: Returns chats and their recent messages in one go.
+   * Now actually fetches from the backend to ensure data consistency.
    */
   async getRecentContext(): Promise<{ chats: TelegramChat[], messages: Record<number, TelegramMessage[]> }> {
-    // Return deep clones to isolate React state from internal singleton mutations
+    try {
+      // 1. Fetch historical updates from backend (Syncing)
+      const response = await apiClient.post<any>("/api/v1/telegram?action=updates", { limit: 100 });
+
+      if (response.success && response.data && Array.isArray(response.data)) {
+        console.log(`[TELEGRAM CLIENT] Syncing ${response.data.length} updates from backend`);
+        response.data.forEach((upd: any) => this.updateCacheFromFirestore(upd));
+      }
+    } catch (err) {
+      console.warn("[TELEGRAM CLIENT] Deep sync failed, using local cache only", err);
+    }
+
+    // 2. Return snapshots of the current internal state
     const clonedMessages: Record<number, TelegramMessage[]> = {};
     Object.entries(this.internalMessages).forEach(([id, msgs]) => {
       clonedMessages[Number(id)] = [...msgs];
