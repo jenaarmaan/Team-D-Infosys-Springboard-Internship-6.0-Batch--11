@@ -46,12 +46,13 @@ async function webhookHandler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        console.log(`🤖 [TELEGRAM WEBHOOK] Incoming update...`);
         const update = req.body;
         await telegramService.processWebhookUpdate(update);
         return res.status(200).send('OK');
     } catch (error: any) {
-        logger.error('Webhook handler failed', error);
-        return res.status(200).send('Error Processed');
+        console.error('🛑 [TELEGRAM WEBHOOK ERROR]:', error);
+        return res.status(200).send(`Error: ${error.message}`);
     }
 }
 
@@ -63,8 +64,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action } = req.query;
     console.log(`🤖 [TELEGRAM API] Method: ${req.method}, Action: ${action || 'webhook'}`);
 
-    console.log("SERVER TELEGRAM CHECK:", { hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN });
-
     if (req.method !== 'POST') {
         return res.status(405).json({
             success: false,
@@ -72,10 +71,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    // Webhook doesn't have an 'action' query param usually, 
-    // it's traditionally at /api/v1/telegram/webhook
-    // If action is absent or 'webhook', we default to webhook processing
-    // if the secret header is present.
+    if (action === 'status') {
+        const envKeys = Object.keys(process.env).filter(k => k.toLowerCase().includes('telegram'));
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const region = process.env.VERCEL_REGION || 'local';
+        let webhookStatus = "unknown";
+
+        // Auto-Repair Check: Try to set webhook if we are on Vercel
+        if (botToken && region !== 'local') {
+            try {
+                const host = req.headers.host;
+                const webhookUrl = `https://${host}/api/v1/telegram`;
+                console.log(`🔧 [TELEGRAM AUTO-REPAIR] Setting webhook to: ${webhookUrl}`);
+
+                const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: webhookUrl,
+                        secret_token: process.env.TELEGRAM_WEBHOOK_SECRET || undefined
+                    })
+                });
+                const data = await res.json();
+                webhookStatus = data.ok ? "Success" : `Failed: ${data.description}`;
+            } catch (err: any) {
+                webhookStatus = `Error: ${err.message}`;
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            config: {
+                hasBotToken: !!botToken,
+                hasWebhookSecret: !!process.env.TELEGRAM_WEBHOOK_SECRET,
+                botTokenPrefix: botToken ? botToken.substring(0, 5) : 'none',
+                region,
+                envKeysFound: envKeys,
+                webhookAutoRepairStatus: webhookStatus
+            }
+        });
+    }
 
     if (action === 'send') {
         return sendHandler(req, res);

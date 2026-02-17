@@ -7,12 +7,12 @@ import { logger } from '../lib/logger';
  * Replaced 'axios' with native 'fetch' for Vercel Serverless stability.
  */
 export class TelegramService {
-    private botToken = process.env.TELEGRAM_BOT_TOKEN;
+    private get botToken() {
+        return process.env.TELEGRAM_BOT_TOKEN;
+    }
 
     constructor() {
-        if (!this.botToken) {
-            console.warn("⚠️ [TELEGRAM SERVICE] TELEGRAM_BOT_TOKEN is missing. Outgoing and incoming Telegram messages will fail.");
-        }
+        console.log("🤖 [TELEGRAM SERVICE] Init status:", { hasToken: !!this.botToken });
     }
 
     /**
@@ -30,12 +30,15 @@ export class TelegramService {
                 body: JSON.stringify({ chat_id: chatId, text })
             });
 
+            console.log(`📡 [TELEGRAM API] Send Status: ${response.status}`);
             const data = await response.json();
+
             if (!data.ok) {
+                console.error(`🛑 [TELEGRAM API ERROR]:`, data);
                 throw new Error(data.description || 'Telegram API Error');
             }
 
-            logger.info('Telegram message sent', { uid, requestId, chatId });
+            console.log(`✅ [TELEGRAM API] Message sent successfully. ID: ${data.result.message_id}`);
             return data.result;
 
         } catch (error: any) {
@@ -67,16 +70,25 @@ export class TelegramService {
             let uid = await this.resolveUidForChat(chatId);
 
             // 🛠️ ACCOUNT LINKING LOGIC
-            if (message.text.startsWith('/link')) {
+            if (message.text && message.text.startsWith('/link')) {
                 const email = message.text.replace('/link', '').trim();
+                console.log(`🔗 [TELEGRAM LINK] Request for email: ${email} from chatId: ${chatId}`);
+
                 if (email) {
-                    logger.info('Attempting Telegram link', { chatId, email });
-                    const linkedUid = await this.linkUserByEmail(chatId, email);
-                    if (linkedUid) {
-                        await this.sendMessage(chatId, `✅ Connection established! your Telegram is now linked to ${email}. You can now use Govind to manage your messages.`);
-                        uid = linkedUid;
-                    } else {
-                        await this.sendMessage(chatId, `❌ Link failed. We couldn't find a registered Govind account with email: ${email}. Please check your spelling or sign up first.`);
+                    try {
+                        const linkedUid = await this.linkUserByEmail(chatId, email);
+                        if (linkedUid) {
+                            console.log(`✅ [TELEGRAM LINK] Success: ${email} linked to ${linkedUid}`);
+                            await this.sendMessage(chatId, `✅ Connection established! your Telegram is now linked to ${email}. You can now use Govind to manage your messages.`);
+                            uid = linkedUid;
+                        } else {
+                            console.warn(`❌ [TELEGRAM LINK] FAILED: No record for ${email}`);
+                            await this.sendMessage(chatId, `❌ Link failed. We couldn't find a registered Govind account with email: ${email}. Please check your spelling or sign up first.`);
+                            return;
+                        }
+                    } catch (linkErr: any) {
+                        console.error(`🛑 [TELEGRAM LINK CRASH]`, linkErr);
+                        await this.sendMessage(chatId, `⚠️ An internal error occurred while linking: ${linkErr.message}`);
                         return;
                     }
                 } else {
@@ -86,23 +98,24 @@ export class TelegramService {
             }
 
             if (!uid) {
-                logger.warn('Incoming Telegram update ignored: No UID mapping found for chat', { chatId, updateId });
+                console.warn(`⚠️ [TELEGRAM WEBHOOK] Update ignored: No UID link found for chatId ${chatId}`);
                 return;
             }
 
+            console.log(`✅ [TELEGRAM WEBHOOK] Processing message for UID: ${uid}`);
             const docRef = getDb().collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
 
             // Idempotency Check: Transactional write to ensure we only process once
             const doc = await docRef.get();
             if (doc.exists) {
-                logger.info('Duplicate Telegram update ignored', { updateId, uid });
+                console.log(`⏩ [TELEGRAM WEBHOOK] Duplicate update ${updateId} skipped.`);
                 return;
             }
 
             // 3. Sink to Firestore
             await docRef.set({
                 processedAt: new Date().toISOString(),
-                chatId: message.chat.id,
+                chatId: chatId,
                 senderId: message.from.id,
                 senderName: message.from.first_name,
                 text: message.text,
@@ -110,10 +123,10 @@ export class TelegramService {
                 uid: uid
             });
 
-            logger.info('Telegram update processed successfully', { updateId, uid, sender: message.from.first_name });
+            console.log(`📡 [TELEGRAM WEBHOOK] Update ${updateId} pushed to Firestore for UID ${uid}`);
 
         } catch (error: any) {
-            logger.error('Telegram webhook processing failure', error, { updateId });
+            console.error('🛑 [TELEGRAM WEBHOOK SERVICE CRASH]:', error);
             throw error;
         }
     }

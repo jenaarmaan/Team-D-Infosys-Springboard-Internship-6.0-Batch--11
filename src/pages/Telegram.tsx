@@ -11,6 +11,8 @@ import { useTelegram } from '@/contexts/TelegramContext';
 import { useGovind } from '@/contexts/GovindContext';
 import { TelegramChatModal } from '@/components/telegram/TelegramChatModal';
 
+import { apiClient } from '@/api/client';
+
 const Telegram = () => {
     const navigate = useNavigate();
     const { speak } = useGovind();
@@ -23,6 +25,15 @@ const Telegram = () => {
         fetchChats,
         error
     } = useTelegram();
+
+    useEffect(() => {
+        // Diagnostic: Check backend status
+        apiClient.post('/api/v1/telegram?action=status', {}).then(res => {
+            console.log("🛠️ [TELEGRAM DIAGNOSTIC] Backend Status:", res);
+        }).catch(err => {
+            console.error("🛠️ [TELEGRAM DIAGNOSTIC] Failed to check status:", err);
+        });
+    }, []);
 
     useEffect(() => {
         if (isConnected) {
@@ -130,18 +141,21 @@ const Telegram = () => {
                                                 <div className="space-y-4 text-left">
                                                     <div className="flex gap-3 items-start">
                                                         <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</div>
-                                                        <p className="text-xs text-white/80">Open <a href="https://t.me/your_bot_name" target="_blank" className="text-[#0088cc] underline">@VoiceMailBot</a> on Telegram</p>
+                                                        <p className="text-xs text-white/80">Open your Telegram app and search for <strong>Voice Mail Assistant</strong></p>
                                                     </div>
                                                     <div className="flex gap-3 items-start">
                                                         <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</div>
-                                                        <p className="text-xs text-white/80">Send the command: <strong>/link</strong> followed by your email</p>
+                                                        <p className="text-xs text-white/80">Send the command in one line: <strong>/link your_email@example.com</strong></p>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-8 pt-6 border-t border-[#0088cc]/10">
+                                                <div className="mt-8 pt-6 border-t border-[#0088cc]/10 space-y-4">
                                                     <p className="text-[10px] text-muted-foreground italic">
                                                         Govind uses end-to-end mapping to ensure your messages stay private.
                                                     </p>
+                                                    <Button variant="ghost" size="sm" className="w-full text-[#0088cc] text-[10px] h-8" onClick={() => fetchChats()}>
+                                                        Check Sync Status
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
