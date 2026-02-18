@@ -13,7 +13,7 @@ import { detectIntent, TargetPlatform } from "@/lib/govind/intentMap";
 import { useGmail } from "@/contexts/GmailContext";
 import { useTelegram } from "@/contexts/TelegramContext";
 import { onAuthChange } from "@/lib/firebase/auth";
-import { speakText, interruptTTS } from "@/services/ttsService";
+import { speakText, interruptTTS, warmUpTTS } from "@/services/ttsService";
 import { useSettings } from "@/contexts/SettingsContext";
 import type { GovindState } from "@/lib/govind/stateMachine";
 import { handleGlobalCommand } from "@/lib/govind/commandRouter";
@@ -348,6 +348,20 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []); // Dependencies for closure safety
 
+  /* ================= NOTIFICATION DISPATCHER ================= */
+  useEffect(() => {
+    const handleNotify = (e: any) => {
+      if (assistantEnabled) {
+        speak(e.detail.text);
+      } else {
+        console.log("[GOVIND] Notification queued (waiting for assistant enable):", e.detail.text);
+      }
+    };
+
+    window.addEventListener("govind:notify", handleNotify);
+    return () => window.removeEventListener("govind:notify", handleNotify);
+  }, [assistantEnabled]); // Re-bind when enabled state changes
+
 
   useEffect(() => {
     const onWakeStateRestore = () => {
@@ -580,6 +594,9 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
   /* ------------------ ENABLE ASSISTANT ------------------ */
   const enableAssistant = async () => {
     if (assistantEnabled) return;
+
+    // 🔑 Unlock audio system from user gesture
+    warmUpTTS();
 
     setAssistantEnabled(true);
     setState("LISTENING");

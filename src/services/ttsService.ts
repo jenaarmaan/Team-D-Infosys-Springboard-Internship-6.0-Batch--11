@@ -53,6 +53,22 @@ export const interruptTTS = () => {
 
 
 
+/**
+ * WARM UP — unlock speech synthesis on user gesture
+ */
+export const warmUpTTS = () => {
+  try {
+    const utterance = new SpeechSynthesisUtterance("");
+    utterance.volume = 0;
+    window.speechSynthesis.speak(utterance);
+    console.log("[TTS] System warmed up");
+  } catch (e) {
+    console.error("[TTS] Warm up failed:", e);
+  }
+};
+
+
+
 export const speakText = (text: string, options?: { cancelPrevious?: boolean, volume?: number, rate?: number }): Promise<void> => {
   return new Promise((resolve) => {
     // 🔒 Prevent overlapping speech unless forced

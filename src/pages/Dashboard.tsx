@@ -3,9 +3,9 @@ import { useGovind } from '@/contexts/GovindContext';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  Mail, 
-  MessageSquare, 
+import {
+  Mail,
+  MessageSquare,
   Mic,
   Clock,
   TrendingUp,
@@ -15,6 +15,7 @@ import {
   Inbox,
   Send as SendIcon
 } from 'lucide-react';
+import { warmUpTTS } from '@/services/ttsService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -35,19 +36,25 @@ const Dashboard = () => {
   ];
 
   const quickActions = [
-    { label: 'Check Gmail', icon: Inbox, action: () => {
-      addMessage('user', 'Check my Gmail');
-      speak("Opening Gmail. You have 12 unread emails. Would you like me to read the most important ones?");
-      navigate('/gmail');
-    }},
-    { label: 'Send Email', icon: SendIcon, action: () => {
-      addMessage('user', 'I want to send an email');
-      speak("Sure, who would you like to send an email to?");
-    }},
-    { label: 'Voice Note', icon: Mic, action: () => {
-      addMessage('user', 'Record a voice note');
-      speak("I'm ready to record your voice note. Start speaking whenever you're ready.");
-    }},
+    {
+      label: 'Check Gmail', icon: Inbox, action: () => {
+        addMessage('user', 'Check my Gmail');
+        speak("Opening Gmail. You have 12 unread emails. Would you like me to read the most important ones?");
+        navigate('/gmail');
+      }
+    },
+    {
+      label: 'Send Email', icon: SendIcon, action: () => {
+        addMessage('user', 'I want to send an email');
+        speak("Sure, who would you like to send an email to?");
+      }
+    },
+    {
+      label: 'Voice Note', icon: Mic, action: () => {
+        addMessage('user', 'Record a voice note');
+        speak("I'm ready to record your voice note. Start speaking whenever you're ready.");
+      }
+    },
   ];
 
   return (
@@ -64,6 +71,7 @@ const Dashboard = () => {
             </p>
           </div>
           <Button onClick={() => {
+            warmUpTTS();
             speak("How can I help you today?");
           }}>
             <Mic className="w-4 h-4 mr-2" />
@@ -126,17 +134,16 @@ const Dashboard = () => {
             <CardContent>
               <div className="space-y-4">
                 {recentActivity.map((item, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        item.type === 'email' ? 'bg-red-500/10 text-red-400' :
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.type === 'email' ? 'bg-red-500/10 text-red-400' :
                         item.type === 'message' ? 'bg-blue-500/10 text-blue-400' :
-                        item.type === 'voice' ? 'bg-primary/10 text-primary' :
-                        'bg-green-500/10 text-green-400'
-                      }`}>
+                          item.type === 'voice' ? 'bg-primary/10 text-primary' :
+                            'bg-green-500/10 text-green-400'
+                        }`}>
                         {item.type === 'email' && <Mail className="w-5 h-5" />}
                         {item.type === 'message' && <MessageSquare className="w-5 h-5" />}
                         {item.type === 'voice' && <Mic className="w-5 h-5" />}
@@ -165,7 +172,7 @@ const Dashboard = () => {
               <div className="flex-1">
                 <h3 className="font-semibold mb-1">Voice Command Tips</h3>
                 <p className="text-sm text-muted-foreground">
-                  Try saying "Hey Govind, read my unread emails" or "What's on my schedule today?" 
+                  Try saying "Hey Govind, read my unread emails" or "What's on my schedule today?"
                   Govind understands natural language, so just speak naturally.
                 </p>
               </div>

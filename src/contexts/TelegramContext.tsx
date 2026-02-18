@@ -135,10 +135,9 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
                         client.updateCacheFromFirestore(upd);
 
                         if (settings.messageAlerts && data.senderId !== 0) {
-                            speakText(`Message from ${upd.senderName}: ${upd.text.substring(0, 30)}`, {
-                                volume: settings.speechVolume / 100,
-                                rate: settings.speechRate / 50
-                            });
+                            window.dispatchEvent(new CustomEvent("govind:notify", {
+                                detail: { text: `Message from ${upd.senderName}: ${upd.text.substring(0, 30)}` }
+                            }));
                         }
                     }
                 });

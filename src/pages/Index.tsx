@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useGovind } from '@/contexts/GovindContext';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { 
-  Mic, 
-  Shield, 
-  Fingerprint, 
-  Sparkles, 
+import {
+  Mic,
+  Shield,
+  Fingerprint,
+  Sparkles,
   ArrowRight,
   Mail,
   MessageSquare,
@@ -48,19 +48,22 @@ const platforms = [
   { icon: Lock, name: 'WhatsApp', color: 'from-green-500 to-emerald-500' },
 ];
 
+import { warmUpTTS } from '@/services/ttsService';
+
 const Index = () => {
-    
+
   const navigate = useNavigate();
   const { wakeUp, speak, addMessage } = useGovind();
 
   const unlockVoice = () => {
-  startListening(); // browser gesture-safe
-  wakeUp();
-};
+    warmUpTTS(); // unlock audio
+    startListening(); // browser gesture-safe
+    wakeUp();
+  };
 
   const handleVoiceLogin = () => {
 
-     unlockVoice();
+    unlockVoice();
     addMessage('user', 'I want to login');
     setTimeout(() => {
       speak("Let's get you logged in. Please look at your camera for face recognition.");
@@ -70,7 +73,7 @@ const Index = () => {
 
   const handleVoiceRegister = () => {
 
-     unlockVoice();
+    unlockVoice();
     addMessage('user', 'I want to register');
     setTimeout(() => {
       speak("Great! Let's create your account. I'll guide you through each step.");
@@ -106,22 +109,22 @@ const Index = () => {
               </h1>
 
               <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                Manage your emails, messages, and digital life completely hands-free. 
+                Manage your emails, messages, and digital life completely hands-free.
                 Just say <span className="text-primary font-medium">"Hey Govind"</span> to get started.
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   onClick={handleVoiceLogin}
                   className="text-lg px-8 py-6 rounded-xl glow-primary"
                 >
                   <Mic className="w-5 h-5 mr-2" />
                   Voice Login
                 </Button>
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   variant="secondary"
                   onClick={handleVoiceRegister}
                   className="text-lg px-8 py-6 rounded-xl"
@@ -176,14 +179,14 @@ const Index = () => {
                 Experience True Hands-Free Computing
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Govind isn't just a voice assistant — it's a complete hands-free platform 
+                Govind isn't just a voice assistant — it's a complete hands-free platform
                 designed for accessibility and efficiency.
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {features.map((feature, index) => (
-                <div 
+                <div
                   key={feature.title}
                   className="p-6 rounded-xl bg-card/50 border border-border/50 hover:border-primary/30 transition-all duration-300 group animate-slide-up"
                   style={{ animationDelay: `${index * 0.1}s` }}
@@ -207,14 +210,14 @@ const Index = () => {
                 Unified Communication Hub
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Manage all your communication platforms with voice commands. 
+                Manage all your communication platforms with voice commands.
                 Read, reply, and organize without lifting a finger.
               </p>
             </div>
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {platforms.map((platform, index) => (
-                <div 
+                <div
                   key={platform.name}
                   className="p-6 rounded-xl bg-card/50 border border-border/50 hover:border-primary/30 transition-all duration-300 text-center group cursor-pointer animate-slide-up"
                   style={{ animationDelay: `${index * 0.1}s` }}
@@ -237,11 +240,11 @@ const Index = () => {
               Ready to Go Hands-Free?
             </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Join thousands of users who have transformed their digital experience 
+              Join thousands of users who have transformed their digital experience
               with voice-first interaction.
             </p>
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               onClick={handleVoiceRegister}
               className="text-lg px-8 py-6 rounded-xl glow-primary"
             >
