@@ -1,5 +1,4 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import admin from 'firebase-admin';
 
 // Initialize Firebase Admin (Self-Contained)
@@ -20,6 +19,43 @@ if (!admin.apps.length) {
     } else {
         admin.initializeApp({ projectId: pId });
     }
+}
+
+async function generateContent(apiKey: string, model: string, prompt: string): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    console.log(`[AI] Fetching via REST: ${url.replace(apiKey, '***')}`);
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{ text: "You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: " + prompt }]
+            }],
+            generationConfig: {
+                maxOutputTokens: 800
+            }
+        })
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        // Log detailed error from Google
+        console.error(`[AI] Google API Error (${response.status}) for ${model}: ${errorBody}`);
+        throw new Error(`Google API Error (${response.status}): ${errorBody}`);
+    }
+
+    const data: any = await response.json();
+    if (!data.candidates || !data.candidates[0].content || !data.candidates[0].content.parts) {
+        console.error(`[AI] Unexpected JSON structure for ${model}:`, JSON.stringify(data));
+        throw new Error("Invalid response structure from Gemini API");
+    }
+
+    const text = data.candidates[0].content.parts[0].text;
+    return text || "";
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -56,69 +92,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'Prompt required' });
         }
 
-        console.log(`[AI] Processing prompt: ${prompt.substring(0, 30)}...`);
+        console.log(`[AI] Processing prompt via REST: ${prompt.substring(0, 30)}...`);
 
-        // 4. Call Gemini (Directly)
-        const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-        const fallbackKey = process.env.apiKey;
-
-        const finalKey = apiKey || fallbackKey;
-
-        if (!finalKey) {
+        // 4. API Key Resolution
+        const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.apiKey;
+        if (!apiKey) {
             console.error("AI Key Missing in Process Env");
             return res.status(500).json({
                 error: 'Server AI Key Missing',
-                details: 'Please enable the Production checkbox for your GEMINI_API_KEY in Vercel Settings.'
+                details: 'Please enable the Production checkbox for GEMINI_API_KEY in Vercel Settings.'
             });
         }
 
-        if (!apiKey && fallbackKey) {
-            console.warn("[AI] Warning: GEMINI_API_KEY not found. Using generic fallback 'apiKey'. This often causes 403/Invalid errors if it is a Firebase key.");
-        }
-
-        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        // 5. Multi-Model Fallback Loop
+        const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
         let lastError;
 
-        for (const modelName of modelsToTry) {
+        for (const model of models) {
             try {
-                console.log(`[AI] Attempting generation with model: ${modelName}`);
-                const genAI = new GoogleGenerativeAI(finalKey);
-                const model = genAI.getGenerativeModel({
-                    model: modelName,
-                    generationConfig: { maxOutputTokens: 800 }
-                });
-
-                const systemPrompt = "You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: " + prompt;
-                const result = await model.generateContent(systemPrompt);
-                const responseText = result.response.text();
+                console.log(`[AI] Trying model: ${model}`);
+                const text = await generateContent(apiKey, model, prompt);
+                console.log(`[AI] Success with ${model}`);
 
                 return res.status(200).json({
                     success: true,
-                    data: { response: responseText, model: modelName }
+                    data: { response: text, model: model }
                 });
             } catch (err: any) {
-                console.warn(`[AI] Failed with ${modelName}: ${err.message}`);
+                console.warn(`[AI] Fail with ${model}`);
                 lastError = err;
-                // If 403 (Permission) or 404 (Not Found), continue to next model
-                // If 400 (Bad Request), it might be prompt related, but worth trying pro
             }
         }
 
-        throw lastError; // All models failed
+        // If we get here, all models failed
+        console.error("[AI CRASH] All models failed.", lastError);
 
-    } catch (error: any) {
-        console.error("[AI CRASH] All models failed.", error);
+        let errorMessage = lastError?.message || "Unknown AI Error";
+        let clientMsg = "AI Service Unavailable";
 
-        let userError = error.message || 'Internal AI Error';
-        if (userError.includes('404') || userError.includes('not found')) {
-            userError = "AI Model not found. Please ensure 'Generative Language API' is enabled in Google Cloud.";
-        } else if (userError.includes('403') || userError.includes('permission')) {
-            userError = "AI Access Denied (403). Check API Key permissions.";
+        if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+            clientMsg = "AI Model not found (404). Please ENABLE 'Generative Language API' in your Google Cloud Console.";
+        } else if (errorMessage.includes("403") || errorMessage.includes("permission")) {
+            clientMsg = "AI Access Denied (403). Your API Key is valid but lacks permissions. Enable 'Generative Language API'.";
+        } else if (errorMessage.includes("400") || errorMessage.includes("INVALID_ARGUMENT")) {
+            clientMsg = "AI Request Invalid (400). The model may be incompatible with the region or prompt.";
+        } else {
+            clientMsg = `AI Error: ${errorMessage.substring(0, 100)}`;
         }
 
         return res.status(500).json({
             success: false,
-            error: userError
+            error: clientMsg,
+            debug: errorMessage
+        });
+
+    } catch (error: any) {
+        console.error("[AI CRASH] Top level:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal Server Error'
         });
     }
 }
