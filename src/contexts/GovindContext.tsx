@@ -713,6 +713,9 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
         speechMsg = "The Gemini API Key is missing in your Vercel Production settings. Please enable the Production checkbox for your Gemini keys and redeploy.";
       } else if (errorMessage.includes("restricted") || errorMessage.includes("Blocked") || errorMessage.includes("403")) {
         speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
+      } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+        // Handle "Model not found" specifically, which often means API not enabled
+        speechMsg = "I couldn't access the AI model. Please ensure the 'Generative Language API' is enabled in your Google Cloud Console.";
       }
 
       telegram.updateSummary(speechMsg);

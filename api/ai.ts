@@ -105,7 +105,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 5. Multi-Model Fallback Loop
-        const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        const models = [
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro",
+            "gemini-pro"
+        ];
         let lastError;
 
         for (const model of models) {
