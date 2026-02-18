@@ -10,7 +10,7 @@ export function getGeminiClient() {
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.apiKey;
     if (!apiKey) {
-        throw new Error('GEMINI_API_KEY (or apiKey) is missing from environment');
+        throw new Error('GEMINI_API_KEY is missing. Please set this in your Vercel environment variables.');
     }
 
     genAI = new GoogleGenerativeAI(apiKey);

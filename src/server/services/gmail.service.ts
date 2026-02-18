@@ -7,7 +7,7 @@ import { logger } from '../lib/logger';
  */
 class GmailService {
     private GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
-    private DEFAULT_TIMEOUT = 15000; // 15 seconds
+    private DEFAULT_TIMEOUT = 20000; // 20 seconds for cross-region fetch
 
     /**
      * Helper to get fetch headers with user token
@@ -58,10 +58,11 @@ class GmailService {
             const data = await response.json();
             const messages = data.messages || [];
 
-            // detailed fetches for all IDs found
-            console.log(`📧 [GMAIL SERVICE] Fetching details for ${messages.length} messages...`);
+            // detailed fetches for all IDs found (limit to 15 to stay within Lambda limits)
+            const listToFetch = messages.slice(0, 15);
+            console.log(`📧 [GMAIL SERVICE] Fetching details for ${listToFetch.length} messages...`);
             const emails = await Promise.all(
-                messages.map(async (msg: any) => {
+                listToFetch.map(async (msg: any) => {
                     try {
                         const detailRes = await fetch(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, {
                             headers: this.getHeaders(token),

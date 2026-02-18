@@ -332,30 +332,34 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       if (!response.ok) throw new Error(`Direct Fetch failed: ${response.status}`);
 
       const data = await response.json();
-      const messages = data.messages || [];
-      const emails = await Promise.all(
-        messages.map(async (msg: any) => {
-          try {
-            const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!detailRes.ok) return null;
-            const detail = await detailRes.json();
-            const headers = detail.payload?.headers || [];
-            const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+      const messages = (data.messages || []).slice(0, 10); // Limit to top 10 for fallback
+      const emails = [];
 
-            return {
-              id: msg.id,
-              threadId: detail.threadId,
-              from: getHeader('From'),
-              subject: getHeader('Subject'),
-              date: new Date(getHeader('Date')),
-              snippet: detail.snippet,
-              isUnread: detail.labelIds?.includes('UNREAD')
-            };
-          } catch (e) { return null; }
-        })
-      );
+      for (const msg of messages) {
+        try {
+          const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!detailRes.ok) continue;
+
+          const detail = await detailRes.json();
+          const headers = detail.payload?.headers || [];
+          const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
+
+          emails.push({
+            id: msg.id,
+            threadId: detail.threadId,
+            from: getHeader('From'),
+            subject: getHeader('Subject'),
+            date: new Date(getHeader('Date')),
+            snippet: detail.snippet,
+            isUnread: detail.labelIds?.includes('UNREAD')
+          });
+
+          // Minimal throttle to avoid 429
+          await new Promise(r => setTimeout(r, 100));
+        } catch (e) { console.warn("[GMAIL] Metadata fetch failed", e); }
+      }
       setInboxEmails(emails.filter(Boolean));
     } catch (fallbackErr) {
       console.error("[GMAIL] Fallback fetch failed:", fallbackErr);
