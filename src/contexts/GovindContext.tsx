@@ -715,7 +715,6 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
         speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
       }
 
-      speak(speechMsg);
       telegram.updateSummary(speechMsg);
       return speechMsg;
     }

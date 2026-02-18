@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const genAI = new GoogleGenerativeAI(finalKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-1.5-flash-latest",
             generationConfig: { maxOutputTokens: 800 }
         });
 
@@ -93,9 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } catch (error: any) {
         console.error("[AI CRASH]", error);
+
+        let userError = error.message || 'Internal AI Error';
+        if (userError.includes('404') || userError.includes('not found')) {
+            userError = "AI Model not found. Please ensure 'Generative Language API' is enabled for this key in Google Cloud Console.";
+        }
+
         return res.status(500).json({
             success: false,
-            error: error.message || 'Internal AI Error'
+            error: userError
         });
     }
 }
