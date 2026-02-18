@@ -1,17 +1,17 @@
 /**
  * Super-Resilient Firebase Admin Handler
- * Optimized for Vercel Cold Starts.
+ * Optimized for Vercel Serverless (ESM).
  */
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 
 let firebaseApp: admin.app.App | null = null;
 
 export async function getFirebaseAdmin(): Promise<admin.app.App> {
-    if (admin.apps.length > 0) {
-        const existing = admin.apps.find(a => a?.name === 'govind-prod');
-        if (existing) return existing;
-        return admin.apps[0]!;
-    }
+    const appName = 'govind-prod';
+
+    // Check if app is already initialized
+    const existingApp = admin.apps.find(a => a?.name === appName);
+    if (existingApp) return existingApp;
 
     const saKeyEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     const pId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.projectId || process.env.PROJECT_ID || 'voicemail-f11f3';
@@ -23,22 +23,31 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
             if (rawJson.includes('\\n') && !rawJson.includes('\n')) rawJson = rawJson.replace(/\\n/g, '\n');
 
             const config = JSON.parse(rawJson);
-            firebaseApp = admin.initializeApp({ credential: admin.credential.cert(config) }, 'govind-prod');
+            firebaseApp = admin.initializeApp({
+                credential: admin.credential.cert(config)
+            }, appName);
             console.log("✅ [FB ADMIN] Booted with Service Account");
         } else {
-            firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-prod');
+            firebaseApp = admin.initializeApp({ projectId: pId }, appName);
             console.log("✅ [FB ADMIN] Booted with ProjectID Fallback");
         }
         return firebaseApp;
     } catch (err: any) {
         if (err.code === 'app/duplicate-app' || err.message?.includes('already exists')) {
-            return admin.app('govind-prod');
+            return admin.app(appName);
         }
-        console.error("🛑 [FB ADMIN] Fatal init error:", err.message);
+        console.error("🛑 [FB ADMIN] Init Error:", err.message);
         if (admin.apps.length > 0) return admin.apps[0]!;
         throw err;
     }
 }
 
-export const getDb = async () => (await getFirebaseAdmin()).firestore();
-export const getAuth = async () => (await getFirebaseAdmin()).auth();
+export const getDb = async () => {
+    const app = await getFirebaseAdmin();
+    return app.firestore();
+};
+
+export const getAuth = async () => {
+    const app = await getFirebaseAdmin();
+    return app.auth();
+};

@@ -8,6 +8,9 @@ import { validator } from '../src/server/lib/validator';
  * Secure proxy for Gemini AI requests.
  */
 const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
+    const start = Date.now();
+    console.log(`🚀 [AI HANDLER START] ReqID: ${req.requestId}`);
+
     try {
         if (req.method !== 'POST') {
             return res.status(405).json({ success: false, error: 'Use POST' });
@@ -19,7 +22,7 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
             try {
                 body = JSON.parse(body);
             } catch (e) {
-                console.warn("⚠️ [AI] Failed to parse string body, using raw body.");
+                console.warn("⚠️ [AI] Failed to parse string body.");
             }
         }
 
@@ -28,13 +31,16 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
             return res.status(400).json({ success: false, error: 'Prompt is required' });
         }
 
-        console.log(`🤖 [AI API] Prompt (len: ${prompt.length}): "${prompt.substring(0, 30)}..."`);
-        console.log(`👤 UID: ${req.uid} | ReqID: ${req.requestId}`);
+        console.log(`🤖 [AI API] Prompt: "${prompt.substring(0, 40)}..."`);
+        // console.log(`👤 UID: ${req.uid} | ReqID: ${req.requestId}`); // This line was removed as per instruction
 
         const result = await geminiService.generateSecureResponse(prompt, {
             uid: req.uid,
             requestId: req.requestId
         });
+
+        const duration = Date.now() - start;
+        console.log(`✅ [AI HANDLER SUCCESS] Duration: ${duration}ms`);
 
         return res.status(200).json({
             success: true,
@@ -42,14 +48,15 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
             error: null
         });
     } catch (error: any) {
-        console.error("🛑 [AI HANDLER ERROR]:", error);
+        const duration = Date.now() - start;
+        console.error(`🛑 [AI HANDLER ERROR] After ${duration}ms:`, error);
 
         // Ensure we always return JSON, even on crash
         return res.status(500).json({
             success: false,
             error: error.message || "Internal AI Error",
             code: error.code || 'AI_CRASH',
-            details: typeof error.details === 'string' ? error.details : null
+            details: error.details || null
         });
     }
 };

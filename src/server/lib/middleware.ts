@@ -42,25 +42,36 @@ export const withMiddleware = (
             console.log("[MIDDLEWARE] Verifying token...");
             const decodedToken = await Promise.race([
                 auth.verifyIdToken(idToken),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 9000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 8000))
             ]) as any;
 
             const authReq = req as AuthenticatedRequest;
             authReq.uid = decodedToken.uid;
             authReq.requestId = requestId;
 
-            console.log(`✅ [AUTH] Verified UID: ${decodedToken.uid} (${Date.now() - start}ms)`);
-            return await handler(authReq, res);
+            const latency = Date.now() - start;
+            console.log(`✅ [AUTH] Verified UID: ${decodedToken.uid} (${latency}ms)`);
+
+            // Set a global timeout for the entire request to 25s (just before Vercel kills it)
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), 25000)
+            );
+
+            return await Promise.race([
+                handler(authReq, res),
+                timeoutPromise
+            ]);
 
         } catch (error: any) {
-            console.error("🛑 [AUTH ERROR]:", error);
+            console.error("🛑 [AUTH ERROR]:", error.message || error);
             const message = error?.message || String(error);
 
+            // Always return a JSON response even on timeout or crash
             return res.status(200).json({
                 success: false,
                 data: null,
                 error: {
-                    code: message === "AUTH_TIMEOUT" ? "AUTH_TIMEOUT" : "AUTH_FAILED",
+                    code: message === "AUTH_TIMEOUT" || message === "REQUEST_TIMEOUT" ? message : "AUTH_FAILED",
                     message: message,
                     latency: Date.now() - start
                 }
