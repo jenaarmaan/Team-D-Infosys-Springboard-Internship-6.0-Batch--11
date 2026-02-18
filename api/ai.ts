@@ -47,6 +47,19 @@ async function generateContent(apiKey: string, model: string, version: string, p
     return text;
 }
 
+// Helper to list actually available models for this key
+async function listAvailableModels(apiKey: string): Promise<string[]> {
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        const response = await fetch(url);
+        if (!response.ok) return [`Error fetching models: ${response.status} ${response.statusText}`];
+        const data: any = await response.json();
+        return data.models ? data.models.map((m: any) => m.name.replace('models/', '')) : ["No models returned"];
+    } catch (e: any) {
+        return [`List check failed: ${e.message}`];
+    }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. CORS Headers
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -109,12 +122,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        // If we get here, all models failed
-        console.error("[AI CRASH] All models failed.", lastError);
+        // --- DIAGNOSTIC PHASE ---
+        console.error("[AI CRASH] All models failed. Running diagnostics...");
+        const availableModels = await listAvailableModels(apiKey);
+        console.error(`[AI DIAGNOSTIC] Key has access to: ${JSON.stringify(availableModels)}`);
+
         return res.status(500).json({
             success: false,
-            error: "AI Services Unavailable. Please check Google Cloud API access.",
-            debug: lastError?.message
+            error: "AI Services Unavailable via Backend.",
+            debug: {
+                lastError: lastError?.message,
+                availableModels: availableModels,
+                keyHint: apiKey ? `${apiKey.substring(0, 5)}...` : 'NONE'
+            }
         });
 
     } catch (error: any) {

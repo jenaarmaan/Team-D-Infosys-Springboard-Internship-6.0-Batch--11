@@ -671,18 +671,22 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
 
 
   /* ------------------ AI ENGINE ------------------ */
+  const isSummarizingRef = useRef(false);
   const generateTelegramSummary = async (messages: any[], chatTitle: string) => {
     if (messages.length === 0) return "No messages to summarize.";
+    if (isSummarizingRef.current) return null;
+    isSummarizingRef.current = true;
 
-    console.log(`[SUMMARY] Generating summary for ${messages.length} messages from "${chatTitle}"`);
-    // Format simple history for AI
-    const historyText = messages
-      .slice(0, 20) // Get last 20 for context
-      .reverse()    // Put in chronological order
-      .map(m => `${m.senderName}: ${m.text}`)
-      .join("\n");
+    try {
+      console.log(`[SUMMARY] Generating summary for ${messages.length} messages from "${chatTitle}"`);
+      // Format simple history for AI
+      const historyText = messages
+        .slice(0, 20) // Get last 20 for context
+        .reverse()    // Put in chronological order
+        .map(m => `${m.senderName}: ${m.text}`)
+        .join("\n");
 
-    const prompt = `
+      const prompt = `
       You are an AI assistant helping a user summarize their Telegram messages.
       The following is a conversation history with "${chatTitle}":
       
@@ -693,33 +697,39 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       Do NOT hallucinate information about meetings or external events not mentioned in the text.
       If it's just greetings like "hello", "whats up", say it's just a casual check-in.
     `;
-    console.log("[SUMMARY] AI Prompt length:", prompt.length);
+      console.log("[SUMMARY] AI Prompt length:", prompt.length);
 
-    try {
-      const { response: aiSummary, privacy } = await callGeminiSecurely(prompt);
+      try {
+        const { response: aiSummary, privacy } = await callGeminiSecurely(prompt);
 
-      if (privacy.entities.length > 0) {
-        console.log(`[PRIVACY] Telegram summary generated with ${privacy.entities.length} masked entities.`);
+        if (privacy.entities.length > 0) {
+          console.log(`[PRIVACY] Telegram summary generated with ${privacy.entities.length} masked entities.`);
+        }
+
+        return aiSummary;
+      } catch (err: any) {
+        console.error("❌ [AI SUMMARY ERROR]:", err);
+
+        const errorMessage = err.message || "";
+        let speechMsg = "I'm having trouble analyzing this conversation right now.";
+
+        if (errorMessage.includes("AI_KEY_MISSING_IN_PRODUCTION") || errorMessage.includes("Server AI Key Missing")) {
+          speechMsg = "The Gemini API Key is missing in your Vercel Production settings. Please enable the Production checkbox for your Gemini keys and redeploy.";
+        } else if (errorMessage.includes("restricted") || errorMessage.includes("Blocked") || errorMessage.includes("403")) {
+          speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
+        } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+          // Handle "Model not found" specifically, which often means API not enabled or billing missing
+          speechMsg = "I couldn't access the AI model. Please ensure the 'Generative Language API' is enabled and Billing is active in Google Cloud.";
+        }
+
+        telegram.updateSummary(speechMsg);
+        return speechMsg;
       }
-
-      return aiSummary;
     } catch (err: any) {
-      console.error("❌ [AI SUMMARY ERROR]:", err);
-
-      const errorMessage = err.message || "";
-      let speechMsg = "I'm having trouble analyzing this conversation right now.";
-
-      if (errorMessage.includes("AI_KEY_MISSING_IN_PRODUCTION") || errorMessage.includes("Server AI Key Missing")) {
-        speechMsg = "The Gemini API Key is missing in your Vercel Production settings. Please enable the Production checkbox for your Gemini keys and redeploy.";
-      } else if (errorMessage.includes("restricted") || errorMessage.includes("Blocked") || errorMessage.includes("403")) {
-        speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
-      } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
-        // Handle "Model not found" specifically, which often means API not enabled
-        speechMsg = "I couldn't access the AI model. Please ensure the 'Generative Language API' is enabled in your Google Cloud Console.";
-      }
-
-      telegram.updateSummary(speechMsg);
-      return speechMsg;
+      console.error("[GLOBAL SUMMARY FAIL]", err);
+      return "An unexpected error occurred.";
+    } finally {
+      isSummarizingRef.current = false;
     }
   };
 

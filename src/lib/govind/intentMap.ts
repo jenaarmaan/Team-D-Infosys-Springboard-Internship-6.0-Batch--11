@@ -58,8 +58,8 @@ const intentPatterns: { action: IntentAction; platform: TargetPlatform; keywords
   { action: "SEND", platform: "telegram", keywords: ["send telegram", "message on telegram", "telegram to"] },
 
   { action: "REPLY", platform: "telegram", keywords: ["reply on telegram", "respond on telegram", "reply to last telegram"] },
-  { action: "DRAFT", platform: "telegram", keywords: ["draft a reply", "suggest a reply", "draft a polite reply", "reply via ai"] },
-  { action: "SUMMARIZE", platform: "telegram", keywords: ["summarize telegram", "summarise telegram", "summarize my telegram", "summarize this chat", "summarize conversation"] },
+  { action: "DRAFT", platform: "telegram", keywords: ["draft a reply", "suggest a reply", "draft a polite reply", "reply via ai", "tell me what to say", "how should i reply"] },
+  { action: "SUMMARIZE", platform: "telegram", keywords: ["summarize telegram", "summarise telegram", "summarize my telegram", "summarize this chat", "summarize conversation", "summarize this conversation", "summarise this conversation", "what happened here", "recap this chat", "tell me what i missed"] },
 
 
   // Specific Gmail Actions (Always checked after platform-specific ones)

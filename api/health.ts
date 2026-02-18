@@ -55,8 +55,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         diagnostics.db = { status: "error", message: e.message };
     }
 
+    // 🚀 GEMINI HEALTH CHECK
+    try {
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.apiKey;
+        if (geminiKey) {
+            const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
+            if (geminiRes.ok) {
+                const data = await geminiRes.json();
+                diagnostics.ai = { status: "connected", count: data.models?.length || 0 };
+            } else {
+                diagnostics.ai = { status: "invalid_key", code: geminiRes.status };
+            }
+        } else {
+            diagnostics.ai = { status: "missing_key" };
+        }
+    } catch (e: any) {
+        diagnostics.ai = { status: "error", message: e.message };
+    }
+
     return res.status(200).json({
-        success: !!(diagnostics.db && diagnostics.db.status === "connected"),
+        success: !!(diagnostics.db && diagnostics.db.status === "connected" && diagnostics.ai?.status === "connected"),
         data: diagnostics
     });
 }

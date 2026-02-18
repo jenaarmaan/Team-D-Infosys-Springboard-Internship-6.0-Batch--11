@@ -34,34 +34,47 @@ export async function callGemini(prompt: string): Promise<string> {
         const apiKey = env.VITE_GEMINI_API_KEY;
 
         if (!apiKey) {
-            console.error("[AI] No frontend Gemini key found. Please set VITE_GEMINI_API_KEY in Vercel Production.");
+            console.error("[AI] No frontend Gemini key found. Please set VITE_GEMINI_API_KEY.");
             throw new Error("AI_KEY_MISSING_IN_PRODUCTION");
         }
 
         console.log(`[AI] Using frontend fallback key starting with: ${apiKey.substring(0, 8)}...`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
-                { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
-            ]
-        });
+        const modelsToTry = ["gemini-1.5-flash", "gemini-pro", "gemini-1.0-pro"];
+        let lastError: any;
 
-        const systemInstruction = "You are Govind, a secure and controlled voice assistant. Your responses must be concise and optimized for text-to-speech output.";
-        const fullPrompt = `${systemInstruction}\n\nUser Request: ${prompt}`;
+        for (const modelName of modelsToTry) {
+            try {
+                console.log(`[AI] Frontend attempting model: ${modelName}`);
+                const model = genAI.getGenerativeModel({
+                    model: modelName,
+                    safetySettings: [
+                        { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
+                        { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
+                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
+                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
+                    ]
+                });
 
-        const result = await model.generateContent(fullPrompt);
-        const response = result.response.text();
-        return response;
+                const systemInstruction = "You are Govind, a secure and controlled voice assistant. Your responses must be concise and optimized for text-to-speech output.";
+                const fullPrompt = `${systemInstruction}\n\nUser Request: ${prompt}`;
+
+                const result = await model.generateContent(fullPrompt);
+                const response = result.response.text();
+                if (response) return response;
+            } catch (err: any) {
+                console.warn(`[AI] Frontend attempt failed for ${modelName}:`, err.message);
+                lastError = err;
+            }
+        }
+
+        throw lastError;
     } catch (fallbackErr: any) {
-        console.error("[AI] Fallback Gemini call failed:", fallbackErr);
+        console.error("[AI] All Frontend Fallback attempts failed:", fallbackErr);
 
         if (fallbackErr.message?.includes("API_KEY_SERVICE_BLOCKED") || fallbackErr.message?.includes("403")) {
-            throw new Error("AI Service Blocked: The browser-side API key is restricted. Please enable 'Generative Language API' in Google Cloud Console or check the backend deployment.");
+            throw new Error("AI Service Blocked: The browser-side API key is restricted. Please enable 'Generative Language API' in Google Cloud Console.");
         }
 
         throw fallbackErr;

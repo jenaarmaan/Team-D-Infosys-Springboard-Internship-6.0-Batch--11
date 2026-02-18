@@ -132,10 +132,10 @@ export const TelegramAdapter: PlatformAdapter = {
           // Send a new message
           try {
             // 1. Resolve Recipient & Body from Text
-            const toMatch = text.match(/(?:to|towards|for)\s+([a-z0-9_]+)|message\s+([a-z0-9_]+)/i);
+            const toMatch = text.match(/(?:to|towards|for)\s+([a-z0-9_]+)|message\s+([a-z0-9_]+)|chat\s+with\s+([a-z0-9_]+)/i);
             const bodyMatch = text.match(/(?:message|body|say|saying|text|tell them)[\s:]+(.+)$/i);
 
-            let recipient = toMatch ? (toMatch[1] || toMatch[2]) : intent.entities.to;
+            let recipient = toMatch ? (toMatch[1] || toMatch[2] || toMatch[3]) : intent.entities.to;
             const body = bodyMatch ? bodyMatch[1].trim() : intent.entities.body;
 
             // 2. Resolve Chat ID (Prioritize active context)
@@ -144,7 +144,7 @@ export const TelegramAdapter: PlatformAdapter = {
             let resolvedChat = chats.find(c => c.id === chatId);
 
             // 3. Fallback to name-based resolution if no active chat or ID mismatch
-            if (chatId === -1 && recipient) {
+            if ((chatId === -1 || !resolvedChat) && recipient) {
               let targetName = recipient.toLowerCase();
               targetName = targetName.replace(/^(the group|the chat|the contact|group|chat)\s+/i, "").trim();
 
@@ -153,7 +153,7 @@ export const TelegramAdapter: PlatformAdapter = {
                 targetName.includes((c.title || "").toLowerCase()) ||
                 (targetName.length > 3 && (c.title || "").toLowerCase().startsWith(targetName.substring(0, 4)))
               );
-              chatId = resolvedChat ? resolvedChat.id : -1;
+              if (resolvedChat) chatId = resolvedChat.id;
             }
 
             // 4. Handle Cases
@@ -305,13 +305,25 @@ export const TelegramAdapter: PlatformAdapter = {
 
         case "SUMMARIZE": {
           try {
-            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
-            const messages = await client.getMessages(chatId, 10);
+            let chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
+
+            // Fallback: If no active chat, try to find any chat with messages
+            if (chatId === -1) {
+              const chats = await client.getChats();
+              const bestChat = chats.find(c => (c.unreadCount || 0) > 0) || chats[0];
+              if (bestChat) chatId = bestChat.id;
+            }
+
+            if (chatId === -1) {
+              return { success: false, message: "I don't see any active chats to summarize. Please open a chat first." };
+            }
+
+            const messages = await client.getMessages(chatId, 15);
 
             if (messages.length === 0) {
               return {
                 success: true,
-                message: "You have no recent messages in this chat to summarize.",
+                message: "There are no recent messages in this chat to summarize.",
                 data: { messages: [], chatId }
               };
             }
@@ -328,19 +340,26 @@ export const TelegramAdapter: PlatformAdapter = {
 
         case "DRAFT": {
           try {
-            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
+            let chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
+
+            if (chatId === -1) {
+              const chats = await client.getChats();
+              const bestChat = chats.find(c => (c.unreadCount || 0) > 0) || chats[0];
+              if (bestChat) chatId = bestChat.id;
+            }
+
             const messages = await client.getMessages(chatId, 10);
             const chatName = intent.entities.to || (await client.getChats()).find(c => c.id === chatId)?.title || "them";
 
             if (messages.length === 0) {
-              return { success: false, message: "Tell me who to message or open a chat first." };
+              return { success: false, message: "I can't draft a reply without any conversation history. Please open a chat first." };
             }
 
             const draft = await generateTelegramDraft(messages, chatName);
 
             return {
               success: true,
-              message: `I've drafted a reply for you. Should I read it or send it?`,
+              message: `I've drafted a reply for you.`,
               data: {
                 type: "OPEN_COMPOSE_REPLY",
                 to: chatName,
