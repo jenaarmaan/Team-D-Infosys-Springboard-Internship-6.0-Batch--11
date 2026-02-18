@@ -59,11 +59,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log(`[AI] Processing prompt: ${prompt.substring(0, 30)}...`);
 
         // 4. Call Gemini (Directly)
-        const keys = Object.keys(process.env).filter(k => k.includes('GEMINI'));
-        console.log(`[AI DIAGNOSTIC] Seen Keys: ${keys.join(', ')}`);
+        const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+        const fallbackKey = process.env.apiKey;
 
-        const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.apiKey;
-        if (!apiKey) {
+        const finalKey = apiKey || fallbackKey;
+
+        if (!finalKey) {
             console.error("AI Key Missing in Process Env");
             return res.status(500).json({
                 error: 'Server AI Key Missing',
@@ -71,7 +72,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey);
+        if (!apiKey && fallbackKey) {
+            console.warn("[AI] Warning: GEMINI_API_KEY not found. Using generic fallback 'apiKey'. This often causes 403/Invalid errors if it is a Firebase key.");
+        }
+
+        const genAI = new GoogleGenerativeAI(finalKey);
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
             generationConfig: { maxOutputTokens: 800 }

@@ -717,6 +717,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
 
       speak(speechMsg);
       telegram.updateSummary(speechMsg);
+      return speechMsg;
     }
   };
 
@@ -1182,14 +1183,14 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
             speak("Sure, let me analyze those messages for you.");
           }
 
-          const aiSummary = await generateTelegramSummary(chatMsgs, chatTitle);
+          const aiSummary = await generateTelegramSummary(chatMsgs, chatTitle) || "I couldn't generate a summary at this time.";
           telegram.updateSummary(aiSummary);
           console.log("[SUMMARY DEBUG] AI Summary generated. Length:", aiSummary.length);
 
           // Small safety delay to ensure previous "Analyzing" speech is done or settling
           setTimeout(() => {
             console.log("[SUMMARY DEBUG] Triggering speech for summary...");
-            const privacyDisclaimer = result.data?.privacyInfo?.length > 0
+            const privacyDisclaimer = (result.data?.privacyInfo && result.data.privacyInfo.length > 0)
               ? " (Note: Some sensitive details were masked for your privacy.)"
               : "";
             speak(aiSummary + privacyDisclaimer, { cancelPrevious: true });
