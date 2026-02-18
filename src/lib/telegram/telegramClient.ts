@@ -90,6 +90,23 @@ export class TelegramClient {
   isConnectedStatus(): boolean {
     return this.isConnected;
   }
+
+  getDefaultChatId(): number {
+    const defaultId = import.meta.env.VITE_TELEGRAM_DEFAULT_CHAT_ID ||
+      import.meta.env.TELEGRAM_DEFAULT_CHAT_ID ||
+      "-1";
+    return parseInt(defaultId, 10);
+  }
+
+  async getChats(): Promise<any[]> {
+    await this.getRecentContext();
+    return Array.from(this.internalChats.values());
+  }
+
+  async getMessages(chatId: number, limit: number = 50): Promise<any[]> {
+    await this.getRecentContext();
+    return (this.internalMessages[chatId] || []).slice(0, limit);
+  }
 }
 
 let telegramClientInstance: TelegramClient | null = null;
