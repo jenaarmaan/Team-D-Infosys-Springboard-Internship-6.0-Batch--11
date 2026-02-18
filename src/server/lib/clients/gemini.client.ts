@@ -8,13 +8,15 @@ export async function getGeminiClient() {
 
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.apiKey || process.env.VITE_GEMINI_API_KEY;
+    // Priority: Explicit Gemini Keys -> generic env keys
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.apiKey;
+
     if (!apiKey) {
-        console.error("❌ [GEMINI CLIENT] API Key missing in environment!");
+        console.error("❌ [GEMINI CLIENT] AI Key missing in environment!");
         throw new Error('GEMINI_API_KEY is missing. Please set this in your Vercel environment variables.');
     }
 
-    console.log(`📡 [GEMINI CLIENT] Initializing with key: ${apiKey.substring(0, 6)}...`);
+    console.log(`📡 [GEMINI CLIENT] Using key starting with: ${apiKey.substring(0, 8)}...`);
     genAI = new GoogleGenerativeAI(apiKey);
     return genAI;
 }

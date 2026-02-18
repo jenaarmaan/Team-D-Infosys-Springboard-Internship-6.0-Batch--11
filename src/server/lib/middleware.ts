@@ -1,4 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { getAuth } from './clients/firebase.admin';
 import crypto from 'crypto';
 
 export type AuthenticatedRequest = VercelRequest & {
@@ -31,8 +32,6 @@ export const withMiddleware = (
 
             const idToken = authHeader.split('Bearer ')[1];
 
-            // Lazy load Admin to prevent boot crashes if possible
-            const { getAuth } = await import('./clients/firebase.admin');
             const auth = await getAuth();
 
             if (!auth) {

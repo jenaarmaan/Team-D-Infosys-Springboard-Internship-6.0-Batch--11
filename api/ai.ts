@@ -1,5 +1,6 @@
 import { VercelResponse } from '@vercel/node';
 import { withMiddleware, AuthenticatedRequest } from '../src/server/lib/middleware';
+import { geminiService } from '../src/server/services/gemini.service';
 import { validator } from '../src/server/lib/validator';
 
 /**
@@ -32,9 +33,6 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
 
         console.log(`🤖 [AI API] Prompt: "${prompt.substring(0, 40)}..."`);
         // console.log(`👤 UID: ${req.uid} | ReqID: ${req.requestId}`); // This line was removed as per instruction
-
-        // Lazy load Gemini Service
-        const { geminiService } = await import('../src/server/services/gemini.service');
 
         const result = await geminiService.generateSecureResponse(prompt, {
             uid: req.uid,
