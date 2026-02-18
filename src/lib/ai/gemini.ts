@@ -31,13 +31,14 @@ export async function callGemini(prompt: string): Promise<string> {
     try {
         const { GoogleGenerativeAI } = await import("@google/generative-ai");
         const env = import.meta.env;
-        const apiKey = env.VITE_GEMINI_API_KEY || env.VITE_FIREBASE_API_KEY || (window as any).apiKey;
+        const apiKey = env.VITE_GEMINI_API_KEY;
 
         if (!apiKey) {
-            throw new Error("Gemini API key not found in frontend environment (VITE_GEMINI_API_KEY).");
+            console.error("[AI] No frontend Gemini key found. Please set VITE_GEMINI_API_KEY in Vercel Production.");
+            throw new Error("AI_KEY_MISSING_IN_PRODUCTION");
         }
 
-        console.log(`[AI] Using frontend fallback key starting with: ${apiKey.substring(0, 6)}...`);
+        console.log(`[AI] Using frontend fallback key starting with: ${apiKey.substring(0, 8)}...`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
