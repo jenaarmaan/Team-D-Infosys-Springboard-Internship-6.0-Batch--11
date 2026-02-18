@@ -34,7 +34,7 @@ export const withMiddleware = (
 
             // Lazy load Admin to prevent boot crashes if possible
             const { getAuth } = await import('./clients/firebase.admin');
-            const auth = getAuth();
+            const auth = await getAuth();
 
             if (!auth) {
                 throw new Error("FIREBASE_AUTH_NOT_AVAILABLE");

@@ -29,7 +29,7 @@ export class TokenService {
      */
     async getValidToken(uid: string): Promise<string> {
         console.log(`🔍 [TOKEN] Searching tokens for UID: ${uid}`);
-        const db = getDb();
+        const db = await getDb();
         if (!db) {
             console.error("❌ [TOKEN] Firestore DB instance is NULL");
             throw new Error('DB_NOT_INITIALIZED');
@@ -103,7 +103,7 @@ export class TokenService {
             const expiresAt = Math.floor(Date.now() / 1000) + expires_in;
 
             // Update Firestore with new token
-            const db = getDb();
+            const db = await getDb();
             await db.collection('gmail_tokens').doc(uid).set({
                 accessToken: access_token,
                 expiresAt,

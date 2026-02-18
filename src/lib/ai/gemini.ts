@@ -30,11 +30,14 @@ export async function callGemini(prompt: string): Promise<string> {
     // Fallback: Direct Frontend Call
     try {
         const { GoogleGenerativeAI } = await import("@google/generative-ai");
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY || (window as any).apiKey;
+        const env = import.meta.env;
+        const apiKey = env.VITE_GEMINI_API_KEY || env.VITE_FIREBASE_API_KEY || (window as any).apiKey;
 
         if (!apiKey) {
-            throw new Error("Gemini API key not found for fallback.");
+            throw new Error("Gemini API key not found in frontend environment (VITE_GEMINI_API_KEY).");
         }
+
+        console.log(`[AI] Using frontend fallback key starting with: ${apiKey.substring(0, 6)}...`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
