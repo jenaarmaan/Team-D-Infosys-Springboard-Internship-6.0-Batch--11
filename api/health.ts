@@ -35,7 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         env: {
             hasSAKey: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
             hasProjectId: !!(process.env.VITE_FIREBASE_PROJECT_ID || process.env.projectId || process.env.PROJECT_ID),
-            hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
+            hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN,
+            hasGeminiKey: !!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
         }
     };
 
