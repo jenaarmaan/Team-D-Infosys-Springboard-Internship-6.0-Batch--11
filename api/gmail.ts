@@ -8,12 +8,12 @@ import { gmailService } from '../src/server/services/gmail.service';
  * Consolidated Gmail API Handler - Standardized Version
  */
 export default withMiddleware(async (req: AuthenticatedRequest, res: VercelResponse) => {
-    const { action } = req.query;
-    const uid = req.uid;
-
-    console.log(`📨 [GMAIL API] Action: ${action}, UID: ${uid}`);
-
     try {
+        const { action } = req.query;
+        const uid = req.uid;
+
+        console.log(`📨 [GMAIL API] Action: ${action}, UID: ${uid}`);
+
         console.log(`🔑 [GMAIL API] Fetching token for UID: ${uid}`);
         const accessToken = await tokenService.getValidToken(uid);
         console.log(`✅ [GMAIL API] Token acquired.`);
@@ -86,11 +86,11 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 });
         }
     } catch (error: any) {
-        console.error("GMAIL SERVICE ERROR:", error);
+        console.error("🛑 [GMAIL HANDLER ERROR]:", error);
         return res.status(error.status || 500).json({
             success: false,
-            data: { messages: [] },
-            error: error.message || "An unexpected error occurred"
+            error: error.message || "An unexpected Gmail error occurred",
+            details: error.details || null
         });
     }
 });

@@ -18,9 +18,12 @@ export const withMiddleware = (
         const requestId = crypto.randomUUID();
         const start = Date.now();
 
+        console.log(`[MIDDLEWARE] Handling request: ${req.url} (${requestId})`);
+
         try {
             const authHeader = req.headers.authorization;
             if (!authHeader?.startsWith('Bearer ')) {
+                console.warn("[MIDDLEWARE] Missing or invalid authorization header");
                 return res.status(200).json({
                     success: false,
                     error: { code: 'AUTH_REQUIRED', message: 'Missing Authorization header' }
@@ -28,11 +31,16 @@ export const withMiddleware = (
             }
 
             const idToken = authHeader.split('Bearer ')[1];
+
+            // Lazy load Admin to prevent boot crashes if possible
+            const { getAuth } = await import('./clients/firebase.admin');
             const auth = getAuth();
 
-            // Increased timeout to 9 seconds. 
-            // Vercel functions have a 10s-15s limit on hobby tier.
-            // We need to give enough time for the regional jump + cold start.
+            if (!auth) {
+                throw new Error("FIREBASE_AUTH_NOT_AVAILABLE");
+            }
+
+            console.log("[MIDDLEWARE] Verifying token...");
             const decodedToken = await Promise.race([
                 auth.verifyIdToken(idToken),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 9000))
@@ -46,15 +54,15 @@ export const withMiddleware = (
             return await handler(authReq, res);
 
         } catch (error: any) {
-            console.error("🛑 [AUTH ERROR]:", error.message);
+            console.error("🛑 [AUTH ERROR]:", error);
+            const message = error?.message || String(error);
 
-            // Return 200 so the frontend can display the specific error
             return res.status(200).json({
                 success: false,
                 data: null,
                 error: {
-                    code: error.message === "AUTH_TIMEOUT" ? "AUTH_TIMEOUT" : "AUTH_FAILED",
-                    message: error.message,
+                    code: message === "AUTH_TIMEOUT" ? "AUTH_TIMEOUT" : "AUTH_FAILED",
+                    message: message,
                     latency: Date.now() - start
                 }
             });
