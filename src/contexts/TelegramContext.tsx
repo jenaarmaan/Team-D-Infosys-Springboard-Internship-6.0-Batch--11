@@ -186,15 +186,32 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
     const selectChat = useCallback((id: number | null) => {
         setActiveChatId(id);
         setIsPopupOpen(!!id);
-    }, []);
+        client.selectChat(id);
+    }, [client]);
 
     return (
         <TelegramContext.Provider value={{
             messages, unreadChats, lastReceivedMessage, currentSummary, currentDraft,
             loading, error, isConnected, activeChatId, isPopupOpen, history,
-            updateMessages: setMessages, updateSummary: setCurrentSummary, updateDraft: setCurrentDraft,
-            updateUnreadChats: setUnreadChats, selectChat, closeChat: () => setIsPopupOpen(false),
-            fetchChats, fetchMessages: async () => { }, summarizeMessages: async () => { }, sendMessage
+            updateMessages: (msgs: TelegramMessage[]) => {
+                if (activeChatId) mergeUpdates({ [activeChatId]: msgs });
+            },
+            updateSummary: setCurrentSummary,
+            updateDraft: setCurrentDraft,
+            updateUnreadChats: setUnreadChats,
+            selectChat,
+            closeChat: () => setIsPopupOpen(false),
+            fetchChats,
+            fetchMessages: async (id) => {
+                const targetId = id || activeChatId;
+                if (!targetId) return;
+                try {
+                    const msgs = await client.getMessages(targetId);
+                    mergeUpdates({ [targetId]: msgs });
+                } catch (e) { }
+            },
+            summarizeMessages: async () => { },
+            sendMessage
         }}>
             {children}
         </TelegramContext.Provider>

@@ -106,9 +106,25 @@ export function detectIntent(text: string): ResolvedIntent {
         else entities.query = "inbox";
       }
 
-      if (pattern.action === "OPEN_PLATFORM" && pattern.platform === "telegram") {
-        const toMatch = normalized.match(/(?:chat with|message from|open chat with|open (?:the )?group|go to (?:the )?chat|show (?:the )?chat with|show (?:the )?group)\s+(.+)/);
-        if (toMatch) entities.to = toMatch[1].trim();
+      // 🧠 Entity Extraction for Platform Actions
+      const nameCaptures = [
+        /(?:with|from|to|for|chat|group|about)\s+([a-z0-9\s]+)$/i,
+        /(?:read|summarize|message|open|show)\s+(?:the\s+)?(?:chat|group|message|conversation)?\s+(?:with|from)?\s*([a-z0-9\s]+)$/i
+      ];
+
+      if (pattern.platform === "telegram" || pattern.platform === "gmail") {
+        for (const regex of nameCaptures) {
+          const match = normalized.match(regex);
+          if (match && match[1]) {
+            const val = match[1].trim();
+            // Avoid capturing action keywords as names
+            const keywords = ["unread", "last", "latest", "telegram", "gmail", "messages", "updates"];
+            if (!keywords.includes(val)) {
+              entities.to = val;
+              break;
+            }
+          }
+        }
       }
 
       return {

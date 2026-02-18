@@ -106,6 +106,11 @@ export class TelegramClient {
     return this.isConnected;
   }
 
+  selectChat(chatId: number | null): void {
+    this.activeChatId = chatId;
+    console.log(`🎯 [TG CLIENT] Active chat set to: ${chatId}`);
+  }
+
   getDefaultChatId(): number {
     const defaultId = import.meta.env.VITE_TELEGRAM_DEFAULT_CHAT_ID ||
       import.meta.env.TELEGRAM_DEFAULT_CHAT_ID ||

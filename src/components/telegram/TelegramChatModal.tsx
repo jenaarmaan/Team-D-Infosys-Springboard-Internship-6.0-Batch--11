@@ -22,7 +22,8 @@ export const TelegramChatModal = () => {
     } = useTelegram();
     const { speak } = useGovind();
 
-    const activeChat = unreadChats.find(c => c.id === activeChatId);
+    const activeChat = unreadChats.find(c => c.id === activeChatId) ||
+        (activeChatId ? { title: history[activeChatId]?.[0]?.chatTitle || "Private Chat" } : null);
 
     const handleMessageClick = (msg: any) => {
         speak(`Message from ${msg.senderName}: ${msg.text}`);
@@ -35,7 +36,7 @@ export const TelegramChatModal = () => {
             <div className="p-3 border-b border-white/5 flex flex-row items-center justify-between bg-slate-900/80">
                 <div className="text-xs font-bold flex items-center gap-2">
                     <Send className="w-3.5 h-3.5 text-[#0088cc]" />
-                    <span className="truncate max-w-[200px]">{activeChat?.title || "Chat"}</span>
+                    <span className="truncate max-w-[200px]">{activeChat?.title || "Telegram Chat"}</span>
                 </div>
                 <Button variant="ghost" size="icon" onClick={closeChat} className="h-7 w-7 rounded-full hover:bg-white/10">
                     <X className="w-3.5 h-3.5" />
@@ -97,6 +98,10 @@ export const TelegramChatModal = () => {
                                 <p className="font-bold mb-0.5">Sync Error</p>
                                 <p className="opacity-80 text-[10px]">{error}</p>
                             </div>
+                        )}
+
+                        {!error && messages.length === 0 && !loading && (
+                            <div className="text-center py-10 opacity-30 italic text-[11px]">No messages yet...</div>
                         )}
 
                         {!error && [...messages].reverse().map((msg) => (

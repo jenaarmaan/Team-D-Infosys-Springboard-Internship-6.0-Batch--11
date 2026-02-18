@@ -657,6 +657,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
   const generateTelegramSummary = async (messages: any[], chatTitle: string) => {
     if (messages.length === 0) return "No messages to summarize.";
 
+    console.log(`[SUMMARY] Generating summary for ${messages.length} messages from "${chatTitle}"`);
     // Format simple history for AI
     const historyText = messages
       .slice(0, 20) // Get last 20 for context
@@ -675,6 +676,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       Do NOT hallucinate information about meetings or external events not mentioned in the text.
       If it's just greetings like "hello", "whats up", say it's just a casual check-in.
     `;
+    console.log("[SUMMARY] AI Prompt length:", prompt.length);
 
     try {
       const { response: aiSummary, privacy } = await callGeminiSecurely(prompt);

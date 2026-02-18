@@ -3,6 +3,7 @@
 import { PlatformAdapter, ExecutionResult } from "@/lib/platforms/platformTypes";
 import { ResolvedIntent } from "@/lib/govind/intentMap";
 import { getTelegramClient } from "./telegramClient";
+import { generateTelegramDraft } from "@/services/telegramDrafter";
 
 /**
  * Telegram Platform Adapter
@@ -43,7 +44,7 @@ export const TelegramAdapter: PlatformAdapter = {
             const unreadChats = chats.filter(c => (c.unreadCount || 0) > 0);
 
             // 1a. "Read my last message" logic (Specific request inside chat)
-            if (intent.text.includes("last message") || intent.text.includes("latest message")) {
+            if (intent.text.includes("last message") || intent.text.includes("latest message") || intent.text.includes("read the message")) {
               const activeChatId = client.activeChatId || -1;
               if (activeChatId !== -1) {
                 const messages = await client.getMessages(activeChatId, 10);
@@ -51,19 +52,50 @@ export const TelegramAdapter: PlatformAdapter = {
                   // Find the last message from the OTHER person
                   const lastIncoming = messages.find(m => m.senderId !== 0);
                   const msg = lastIncoming || messages[0];
+                  const senderName = msg.senderId === 0 ? "You" : (msg.senderName || "Unknown");
 
                   return {
                     success: true,
-                    message: `The last message from ${msg.senderName} says: ${msg.text}`,
-                    data: { type: "READ_SINGLE", message: msg }
+                    message: `The last message from ${senderName} says: ${msg.text}`,
+                    data: { type: "READ_SINGLE", message: msg, chatId: activeChatId }
                   };
                 }
               }
             }
 
-            // 1. If user didn't specify a chat, and there are unread chats, list them.
-            if (!intent.entities.to && unreadChats.length > 0) {
-              let spoken = `You have unread messages from ${unreadChats.length} contacts: `;
+            // 1b. If the user explicitly named someone, target that first
+            let targetName = (intent.entities.to || "").toLowerCase();
+            targetName = targetName.replace(/^(the group|the chat|the contact|group|chat|message from|messages from)\s+/i, "").trim();
+
+            if (targetName) {
+              const resolvedChat = chats.find(c =>
+                (c.title || "").toLowerCase().includes(targetName) ||
+                targetName.includes((c.title || "").toLowerCase())
+              );
+
+              if (resolvedChat) {
+                const messages = await client.getMessages(resolvedChat.id, 5);
+                if (messages.length === 0) {
+                  return { success: true, message: `No messages found in your chat with ${resolvedChat.title}.` };
+                }
+
+                let spokenText = `In your chat with ${resolvedChat.title}, you have ${messages.length} messages. `;
+                messages.slice(0, 3).forEach((msg, idx) => {
+                  spokenText += `Message ${idx + 1} from ${msg.senderName || "Unknown"}: ${msg.text.substring(0, 100)}. `;
+                });
+
+                return {
+                  success: true,
+                  message: spokenText,
+                  data: { messages, chatId: resolvedChat.id, type: "MESSAGES_LIST" }
+                };
+              }
+            }
+
+            // 1. If user didn't specify a chat (or resolution failed), and there are unread chats, list them.
+            if (!targetName && unreadChats.length > 0) {
+              const count = unreadChats.length;
+              let spoken = `You have unread messages from ${count} contact${count > 1 ? 's' : ''}: `;
               spoken += unreadChats.map(c => `${c.title} (${c.unreadCount} new)`).join(", ") + ". ";
               spoken += "Which one would you like me to read?";
 
@@ -74,45 +106,18 @@ export const TelegramAdapter: PlatformAdapter = {
               };
             }
 
-            // 2. Identify the target chat
-            let targetName = (intent.entities.to || "").toLowerCase();
-            // Clean up target name (strip common filler words used in voice)
-            targetName = targetName.replace(/^(the group|the chat|the contact|group|chat)\s+/i, "").trim();
-
-            const resolvedChat = chats.find(c =>
-              (c.title || "").toLowerCase().includes(targetName) ||
-              targetName.includes((c.title || "").toLowerCase())
-            );
-            const chatId = resolvedChat ? resolvedChat.id : (client.getDefaultChatId() || -1);
-
-            if (chatId === -1 || (!resolvedChat && targetName)) {
+            if (unreadChats.length === 0 && !targetName) {
               return {
                 success: true,
-                message: targetName
-                  ? `I couldn't find a group or chat named "${targetName}". Please try again.`
-                  : "Which chat would you like to read messages from? Please specify a contact or chat name."
+                message: "You have no unread Telegram messages at the moment."
               };
             }
-
-            const messages = await client.getMessages(chatId, 5);
-
-            if (messages.length === 0) {
-              return {
-                success: true,
-                message: `No messages found in chat with ${resolvedChat?.title || "this contact"}.`
-              };
-            }
-
-            // Format messages for voice
-            let spokenText = `In your chat with ${resolvedChat?.title || "them"}, you have ${messages.length} messages. `;
-            messages.slice(0, 3).forEach((msg, idx) => {
-              spokenText += `Message ${idx + 1} from ${msg.senderName || "Unknown"}: ${msg.text.substring(0, 100)}. `;
-            });
 
             return {
               success: true,
-              message: spokenText,
-              data: { messages, chatId, type: "MESSAGES_LIST" }
+              message: targetName
+                ? `I couldn't find a group or chat named "${targetName}".`
+                : "Who would you like to read messages from?"
             };
           } catch (err: any) {
             return {
@@ -134,11 +139,11 @@ export const TelegramAdapter: PlatformAdapter = {
             const body = bodyMatch ? bodyMatch[1].trim() : intent.entities.body;
 
             // 2. Resolve Chat ID (Prioritize active context)
-            let chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : -1;
+            let chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || -1);
             const chats = await client.getChats();
             let resolvedChat = chats.find(c => c.id === chatId);
 
-            // 3. Fallback to name-based resolution if no active chat
+            // 3. Fallback to name-based resolution if no active chat or ID mismatch
             if (chatId === -1 && recipient) {
               let targetName = recipient.toLowerCase();
               targetName = targetName.replace(/^(the group|the chat|the contact|group|chat)\s+/i, "").trim();
@@ -202,18 +207,22 @@ export const TelegramAdapter: PlatformAdapter = {
             const messageId = messageIdMatch ? parseInt(messageIdMatch[1] || messageIdMatch[2]) : -1;
             const replyBody = bodyMatch ? (bodyMatch[1] || bodyMatch[2] || bodyMatch[3]) : intent.entities.body;
 
-            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.getDefaultChatId() || -1);
+            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
             const chats = await client.getChats();
             const resolvedChat = chats.find(c => c.id === chatId);
-            if (messageId === -1 || !replyBody) {
+
+            if (!replyBody) {
               return {
-                success: false,
-                message: "Please specify which message to reply to and what you want to say.",
-                error: "MISSING_FIELDS"
+                success: true,
+                message: `What should I reply to ${resolvedChat?.title || "them"}?`,
+                data: {
+                  type: "OPEN_COMPOSE_REPLY",
+                  to: resolvedChat?.title || "them",
+                  chatId,
+                  body: ""
+                }
               };
             }
-
-            // const result = await client.replyToMessage(chatId, messageId, replyBody);
 
             // Trigger voice flow for reply
             return {
@@ -249,14 +258,14 @@ export const TelegramAdapter: PlatformAdapter = {
             if (!client.isConnectedStatus()) {
               return {
                 success: true,
-                message: "Opening Telegram Dashboard. Please note that you need to be authenticated via environment variables.",
+                message: "Opening Telegram Dashboard.",
                 data: { type: "NAVIGATE_CHATS" }
               };
             }
 
             let targetName = (intent.entities.to || "").toLowerCase();
             // Clean up target name (strip common filler words used in voice)
-            targetName = targetName.replace(/^(the group|the chat|the contact|group|chat)\s+/i, "").trim();
+            targetName = targetName.replace(/^(the group|the chat|the contact|group|chat|the conversation with)\s+/i, "").trim();
 
             if (targetName) {
               const chats = await client.getChats();
@@ -296,55 +305,52 @@ export const TelegramAdapter: PlatformAdapter = {
 
         case "SUMMARIZE": {
           try {
-            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.getDefaultChatId() || -1);
-            // User requested: "recent 5-10 messages"
+            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
             const messages = await client.getMessages(chatId, 10);
 
             if (messages.length === 0) {
               return {
                 success: true,
-                message: "You have no recent messages to summarize.",
+                message: "You have no recent messages in this chat to summarize.",
                 data: { messages: [], chatId }
               };
             }
 
             return {
               success: true,
-              message: "Analyzing the last messages...",
+              message: "Analyzing the last few messages...",
               data: { messages, chatId, type: "SUMMARY_DATA" }
             };
           } catch (err: any) {
-            return {
-              success: false,
-              message: "Failed to summarize Telegram messages",
-              error: err.message
-            };
+            return { success: false, message: "Failed to summarize messages.", error: err.message };
           }
         }
 
         case "DRAFT": {
           try {
-            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.getDefaultChatId() || -1);
-            const messages = await client.getMessages(chatId, 5);
-            const chatName = intent.entities.to || "them";
+            const chatId = intent.entities.chatId ? parseInt(intent.entities.chatId) : (client.activeChatId || client.getDefaultChatId() || -1);
+            const messages = await client.getMessages(chatId, 10);
+            const chatName = intent.entities.to || (await client.getChats()).find(c => c.id === chatId)?.title || "them";
 
-            // In real implementation, this would call generateEmailDraft or similar
-            const draftBody = messages.length > 0
-              ? `I've analyzed the recent activity with ${chatName}. I suggest saying: "I've received your updates and will follow up shortly."`
-              : "I suggest a polite greeting: 'Hello! How can I help you today?'";
+            if (messages.length === 0) {
+              return { success: false, message: "Tell me who to message or open a chat first." };
+            }
+
+            const draft = await generateTelegramDraft(messages, chatName);
 
             return {
               success: true,
-              message: "I've drafted a suggestion for you. Should I read it or send it?",
+              message: `I've drafted a reply for you. Should I read it or send it?`,
               data: {
                 type: "OPEN_COMPOSE_REPLY",
                 to: chatName,
                 chatId,
-                body: draftBody.replace("I suggest saying: ", "").replace("I suggest a polite greeting: ", "").replace(/"/g, "")
+                body: draft.body,
+                privacyInfo: draft.privacyInfo
               }
             };
           } catch (err: any) {
-            return { success: false, message: "Failed to draft suggestion." };
+            return { success: false, message: "Failed to generate AI suggestion." };
           }
         }
 
