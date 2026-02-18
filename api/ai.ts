@@ -18,7 +18,9 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
             return res.status(400).json({ success: false, error: 'Prompt is required' });
         }
 
-        console.log(`🤖 [AI API] Generating response for UID: ${req.uid}`);
+        console.log(`🤖 [AI API] Prompt (len: ${prompt.length}): "${prompt.substring(0, 20)}..."`);
+        console.log(`👤 UID: ${req.uid}`);
+
         const response = await geminiService.generateSecureResponse(prompt, { uid: req.uid, requestId: req.requestId });
 
         return res.status(200).json({

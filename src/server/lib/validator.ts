@@ -9,7 +9,7 @@ export const validator = {
         if (typeof input !== 'string') return '';
         return input
             .replace(/<[^>]*>?/gm, '') // Strip HTML tags
-            .replace(/[^\w\s.,?!'"\-:;()\[\]]/gi, '') // Allow alphanumeric + standard AI prompt punctuation
+            .replace(/[^\w\s.,?!'"\-:;()\[\]@#$%/]/gi, '') // Allow alphanumeric + standard AI prompt punctuation + common symbols
             .trim();
     },
 
