@@ -59,10 +59,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log(`[AI] Processing prompt: ${prompt.substring(0, 30)}...`);
 
         // 4. Call Gemini (Directly)
+        const keys = Object.keys(process.env).filter(k => k.includes('GEMINI'));
+        console.log(`[AI DIAGNOSTIC] Seen Keys: ${keys.join(', ')}`);
+
         const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
         if (!apiKey) {
-            console.error("AI Key Missing");
-            return res.status(500).json({ error: 'Server AI Key Missing' });
+            console.error("AI Key Missing in Process Env");
+            return res.status(500).json({
+                error: 'Server AI Key Missing',
+                details: 'Please enable the Production checkbox for GEMINI_API_KEY in Vercel Settings.'
+            });
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);

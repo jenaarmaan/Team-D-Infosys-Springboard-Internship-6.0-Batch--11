@@ -703,13 +703,20 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       }
 
       return aiSummary;
-    } catch (e: any) {
-      console.error("❌ [AI SUMMARY ERROR]:", e);
-      const errorMsg = e.message || String(e);
-      if (errorMsg.includes("Blocked") || errorMsg.includes("restricted")) {
-        return "AI access is currently restricted. Please check your API key settings.";
+    } catch (err: any) {
+      console.error("❌ [AI SUMMARY ERROR]:", err);
+
+      const errorMessage = err.message || "";
+      let speechMsg = "I'm having trouble analyzing this conversation right now.";
+
+      if (errorMessage.includes("AI_KEY_MISSING_IN_PRODUCTION") || errorMessage.includes("Server AI Key Missing")) {
+        speechMsg = "The Gemini API Key is missing in your Vercel Production settings. Please enable the Production checkbox for your Gemini keys and redeploy.";
+      } else if (errorMessage.includes("restricted") || errorMessage.includes("Blocked") || errorMessage.includes("403")) {
+        speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
       }
-      return "I'm having trouble analyzing this conversation right now.";
+
+      speak(speechMsg);
+      telegram.updateSummary(speechMsg);
     }
   };
 
