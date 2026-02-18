@@ -3,7 +3,8 @@ import App from "./App.tsx";
 import "./index.css";
 
 console.log("FRONTEND ENV CHECK:", {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    firebaseKey: import.meta.env.VITE_FIREBASE_API_KEY ? "EXISTS" : "MISSING",
+    geminiKey: import.meta.env.VITE_GEMINI_API_KEY ? "EXISTS" : "MISSING",
     googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID
 });
 

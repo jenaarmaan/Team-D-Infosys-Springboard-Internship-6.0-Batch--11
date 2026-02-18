@@ -56,8 +56,13 @@ export async function callGemini(prompt: string): Promise<string> {
         const result = await model.generateContent(fullPrompt);
         const response = result.response.text();
         return response;
-    } catch (fallbackErr) {
+    } catch (fallbackErr: any) {
         console.error("[AI] Fallback Gemini call failed:", fallbackErr);
+
+        if (fallbackErr.message?.includes("API_KEY_SERVICE_BLOCKED") || fallbackErr.message?.includes("403")) {
+            throw new Error("AI Service Blocked: The browser-side API key is restricted. Please enable 'Generative Language API' in Google Cloud Console or check the backend deployment.");
+        }
+
         throw fallbackErr;
     }
 }

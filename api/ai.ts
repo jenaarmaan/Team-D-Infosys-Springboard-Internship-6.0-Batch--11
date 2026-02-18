@@ -13,27 +13,43 @@ const handler = async (req: AuthenticatedRequest, res: VercelResponse) => {
             return res.status(405).json({ success: false, error: 'Use POST' });
         }
 
-        const { prompt } = req.body;
+        // Defensive body parsing
+        let body = req.body;
+        if (typeof body === 'string' && body.length > 0) {
+            try {
+                body = JSON.parse(body);
+            } catch (e) {
+                console.warn("⚠️ [AI] Failed to parse string body, using raw body.");
+            }
+        }
+
+        const { prompt } = body || {};
         if (!prompt) {
             return res.status(400).json({ success: false, error: 'Prompt is required' });
         }
 
-        console.log(`🤖 [AI API] Prompt (len: ${prompt.length}): "${prompt.substring(0, 20)}..."`);
-        console.log(`👤 UID: ${req.uid}`);
+        console.log(`🤖 [AI API] Prompt (len: ${prompt.length}): "${prompt.substring(0, 30)}..."`);
+        console.log(`👤 UID: ${req.uid} | ReqID: ${req.requestId}`);
 
-        const response = await geminiService.generateSecureResponse(prompt, { uid: req.uid, requestId: req.requestId });
+        const result = await geminiService.generateSecureResponse(prompt, {
+            uid: req.uid,
+            requestId: req.requestId
+        });
 
         return res.status(200).json({
             success: true,
-            data: { response },
+            data: { response: result },
             error: null
         });
     } catch (error: any) {
         console.error("🛑 [AI HANDLER ERROR]:", error);
+
+        // Ensure we always return JSON, even on crash
         return res.status(500).json({
             success: false,
             error: error.message || "Internal AI Error",
-            details: error.details || null
+            code: error.code || 'AI_CRASH',
+            details: typeof error.details === 'string' ? error.details : null
         });
     }
 };

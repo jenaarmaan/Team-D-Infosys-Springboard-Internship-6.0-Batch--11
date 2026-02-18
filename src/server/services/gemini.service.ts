@@ -30,9 +30,21 @@ export class GeminiService {
             ];
 
             const result = await model.generateContent({ contents });
-            const response = result.response.text();
 
-            logger.info('Gemini response generated', { uid, requestId });
+            if (!result.response) {
+                throw new Error("Gemini returned an empty response object.");
+            }
+
+            const response = result.response.text();
+            if (!response) {
+                console.warn("⚠️ [GEMINI] Response text is empty. Result:", JSON.stringify(result.response));
+            }
+
+            logger.info('Gemini response generated', {
+                uid,
+                requestId,
+                tokCount: result.response.usageMetadata?.totalTokenCount
+            });
             return response;
 
         } catch (error: any) {
