@@ -181,9 +181,13 @@ export const initVoiceRecognition = (rec: any) => {
     isStarting = false;
     lastErrorType = event.error;
     lastErrorTime = Date.now();
-    console.error("[VOICE] Mic error:", event.error, event.message);
+    const isPlannedAbort = event.error === 'aborted' && (micState === "PAUSED_BY_REASON" || pauseReasons.size > 0);
 
-    errorBackoffCount++;
+    if (!isPlannedAbort) {
+      errorBackoffCount++;
+    } else {
+      console.log("[VOICE] Planned abort — ignoring error backoff");
+    }
 
     // 💣 RE-INITIALIZATION TRIGGER
     // If we hit 3 errors in a row (reduced from 4 for faster recovery)

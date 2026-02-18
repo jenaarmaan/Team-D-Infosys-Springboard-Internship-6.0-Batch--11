@@ -1,12 +1,12 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 /**
  * Cold-Start Optimized Gemini Client Singleton
  */
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: any = null;
 
-export function getGeminiClient() {
+export async function getGeminiClient() {
     if (genAI) return genAI;
+
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.apiKey || process.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -19,8 +19,9 @@ export function getGeminiClient() {
     return genAI;
 }
 
-export function getGeminiModel(modelName: string = 'gemini-1.5-flash') {
-    return getGeminiClient().getGenerativeModel({
+export async function getGeminiModel(modelName: string = 'gemini-1.5-flash') {
+    const client = await getGeminiClient();
+    return client.getGenerativeModel({
         model: modelName,
         safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },

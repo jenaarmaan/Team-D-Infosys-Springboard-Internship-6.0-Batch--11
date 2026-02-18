@@ -22,7 +22,7 @@ export class GeminiService {
         }
 
         try {
-            const model = getGeminiModel();
+            const model = await getGeminiModel();
 
             // 2. Wrap Prompt in Guardrails - Use simpler string-based prompt for maximum compatibility
             const fullPrompt = `You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: ${cleanPrompt}`;

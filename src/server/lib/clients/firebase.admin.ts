@@ -2,21 +2,20 @@
  * Super-Resilient Firebase Admin Handler
  * Optimized for Vercel Serverless (ESM).
  */
-import admin from 'firebase-admin';
+let firebaseApp: any = null;
 
-let firebaseApp: admin.app.App | null = null;
-
-export async function getFirebaseAdmin(): Promise<admin.app.App> {
+export async function getFirebaseAdmin(): Promise<any> {
     const appName = 'govind-prod';
 
-    // Check if app is already initialized
-    const existingApp = admin.apps.find(a => a?.name === appName);
-    if (existingApp) return existingApp;
-
-    const saKeyEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    const pId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.projectId || process.env.PROJECT_ID || 'voicemail-f11f3';
-
+    // Check if app is already initialized in the global admin (if loaded)
     try {
+        const admin = (await import('firebase-admin')).default;
+        const existingApp = admin.apps.find(a => a?.name === appName);
+        if (existingApp) return existingApp;
+
+        const saKeyEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+        const pId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.projectId || process.env.PROJECT_ID || 'voicemail-f11f3';
+
         if (saKeyEnv) {
             let rawJson = saKeyEnv.trim();
             if (rawJson.startsWith('"') && rawJson.endsWith('"')) rawJson = rawJson.substring(1, rawJson.length - 1);
@@ -33,21 +32,19 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
         }
         return firebaseApp;
     } catch (err: any) {
-        if (err.code === 'app/duplicate-app' || err.message?.includes('already exists')) {
-            return admin.app(appName);
-        }
-        console.error("🛑 [FB ADMIN] Init Error:", err.message);
-        if (admin.apps.length > 0) return admin.apps[0]!;
+        // Fallback: Check if we can recover the existing app
+        try {
+            const admin = (await import('firebase-admin')).default;
+            if (err.code === 'app/duplicate-app' || err.message?.includes('already exists')) {
+                return admin.app(appName);
+            }
+            if (admin.apps.length > 0) return admin.apps[0]!;
+        } catch (e) { }
+
+        console.error("🛑 [FB ADMIN] Init Failure:", err.message);
         throw err;
     }
 }
 
-export const getDb = async () => {
-    const app = await getFirebaseAdmin();
-    return app.firestore();
-};
-
-export const getAuth = async () => {
-    const app = await getFirebaseAdmin();
-    return app.auth();
-};
+export const getDb = async () => (await getFirebaseAdmin()).firestore();
+export const getAuth = async () => (await getFirebaseAdmin()).auth();

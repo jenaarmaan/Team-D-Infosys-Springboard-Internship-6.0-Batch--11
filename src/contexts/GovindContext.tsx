@@ -703,9 +703,13 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       }
 
       return aiSummary;
-    } catch (e) {
-      console.error("Failed to generate AI summary:", e);
-      return "Thread of recent messages.";
+    } catch (e: any) {
+      console.error("❌ [AI SUMMARY ERROR]:", e);
+      const errorMsg = e.message || String(e);
+      if (errorMsg.includes("Blocked") || errorMsg.includes("restricted")) {
+        return "AI access is currently restricted. Please check your API key settings.";
+      }
+      return "I'm having trouble analyzing this conversation right now.";
     }
   };
 
