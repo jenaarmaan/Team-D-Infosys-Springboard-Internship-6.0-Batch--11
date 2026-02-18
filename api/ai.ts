@@ -76,27 +76,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.warn("[AI] Warning: GEMINI_API_KEY not found. Using generic fallback 'apiKey'. This often causes 403/Invalid errors if it is a Firebase key.");
         }
 
-        const genAI = new GoogleGenerativeAI(finalKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash-latest",
-            generationConfig: { maxOutputTokens: 800 }
-        });
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        let lastError;
 
-        const systemPrompt = "You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: " + prompt;
-        const result = await model.generateContent(systemPrompt);
-        const responseText = result.response.text();
+        for (const modelName of modelsToTry) {
+            try {
+                console.log(`[AI] Attempting generation with model: ${modelName}`);
+                const genAI = new GoogleGenerativeAI(finalKey);
+                const model = genAI.getGenerativeModel({
+                    model: modelName,
+                    generationConfig: { maxOutputTokens: 800 }
+                });
 
-        return res.status(200).json({
-            success: true,
-            data: { response: responseText }
-        });
+                const systemPrompt = "You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: " + prompt;
+                const result = await model.generateContent(systemPrompt);
+                const responseText = result.response.text();
+
+                return res.status(200).json({
+                    success: true,
+                    data: { response: responseText, model: modelName }
+                });
+            } catch (err: any) {
+                console.warn(`[AI] Failed with ${modelName}: ${err.message}`);
+                lastError = err;
+                // If 403 (Permission) or 404 (Not Found), continue to next model
+                // If 400 (Bad Request), it might be prompt related, but worth trying pro
+            }
+        }
+
+        throw lastError; // All models failed
 
     } catch (error: any) {
-        console.error("[AI CRASH]", error);
+        console.error("[AI CRASH] All models failed.", error);
 
         let userError = error.message || 'Internal AI Error';
         if (userError.includes('404') || userError.includes('not found')) {
-            userError = "AI Model not found. Please ensure 'Generative Language API' is enabled for this key in Google Cloud Console.";
+            userError = "AI Model not found. Please ensure 'Generative Language API' is enabled in Google Cloud.";
+        } else if (userError.includes('403') || userError.includes('permission')) {
+            userError = "AI Access Denied (403). Check API Key permissions.";
         }
 
         return res.status(500).json({
