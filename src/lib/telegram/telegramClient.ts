@@ -23,20 +23,28 @@ export class TelegramClient {
   }
 
   updateCacheFromFirestore(update: any) {
-    const { chatId, senderId, senderName, text, date, chatTitle, chatType, id } = update;
+    const rawChatId = update.chatId || update.chat_id;
+    if (!rawChatId) {
+      console.warn("⚠️ [TG CLIENT] Update missing chatId:", update);
+      return;
+    }
 
-    if (!chatId) return;
+    const chatId = Number(rawChatId);
+    const { senderId, senderName, text, date, chatTitle, chatType, id } = update;
 
     // 1. Update Chat
     const existing = this.internalChats.get(chatId);
-    this.internalChats.set(chatId, {
+    const newChat: TelegramChat = {
       id: chatId,
       title: chatTitle || existing?.title || senderName || "Private Chat",
       isPrivate: chatType === "private",
       isSupergroup: chatType === "supergroup" || chatType === "channel",
-      unreadCount: existing ? (text ? (existing.unreadCount || 0) + 1 : existing.unreadCount) : (text ? 1 : 0),
+      unreadCount: existing ? (text && text !== existing.lastMessage ? (existing.unreadCount || 0) + 1 : existing.unreadCount) : (text ? 1 : 0),
       lastMessage: text || existing?.lastMessage || "[Update]"
-    });
+    };
+
+    this.internalChats.set(chatId, newChat);
+    console.log(`📝 [TG CLIENT] Cache updated for chat ${chatId}. Total chats: ${this.internalChats.size}`);
 
     // 2. Update Message
     if (text || id) {
@@ -70,6 +78,13 @@ export class TelegramClient {
       result.data.forEach((upd: any) => this.updateCacheFromFirestore(upd));
     }
 
+    return {
+      chats: Array.from(this.internalChats.values()),
+      messages: { ...this.internalMessages }
+    };
+  }
+
+  getRecentContextLocally() {
     return {
       chats: Array.from(this.internalChats.values()),
       messages: { ...this.internalMessages }

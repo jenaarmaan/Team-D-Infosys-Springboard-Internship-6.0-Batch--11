@@ -29,6 +29,12 @@ const Telegram = () => {
 
     const [backendStatus, setBackendStatus] = useState<any>(null);
 
+    console.log("📺 [TELEGRAM PAGE] State Update:", {
+        isConnected,
+        unreadChatsCount: unreadChats?.length,
+        hasError: !!error
+    });
+
     useEffect(() => {
         // Diagnostic: Check backend status
         apiClient.post<any>('/api/v1/telegram?action=status', {}).then(res => {

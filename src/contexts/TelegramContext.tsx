@@ -109,10 +109,12 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
+            setIsConnected(true);
             console.log("🔗 [TG LISTENER] Starting for:", user.email);
             const q = query(collection(db, "telegram_updates", user.uid, "updates"), orderBy("date", "desc"), limit(50));
 
             const unsubSnap = onSnapshot(q, (snap) => {
+                console.log(`📡 [TG CONTEXT] Received ${snap.size} Firestore updates`);
                 snap.docChanges().forEach(change => {
                     if (change.type === "added") {
                         const data = change.doc.data();
@@ -141,13 +143,15 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
                     }
                 });
 
-                client.getRecentContext().then(res => {
-                    setUnreadChats(res.chats);
-                    mergeUpdates(res.messages);
-                }).catch(e => console.warn("[TG LISTENER] catch-up sync failed:", e.message));
+                // Update UI directly from client cache (no API call needed for realtime)
+                const res = client.getRecentContextLocally();
+                console.log(`✅ [TG CONTEXT] UI updated with ${res.chats.length} chats from local cache`);
+                setUnreadChats([...res.chats]);
+                mergeUpdates(res.messages);
             }, (err) => {
                 console.error("[TG LISTENER] Permission Error:", err.message);
                 setError(`Sync Error: ${err.message}`);
+                setIsConnected(false);
             });
 
             return () => unsubSnap();
