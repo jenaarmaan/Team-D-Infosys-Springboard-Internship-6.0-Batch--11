@@ -102,23 +102,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const keyPrefix = apiKey.substring(0, 10);
         const keySuffix = apiKey.substring(apiKey.length - 4);
-        console.log(`[AI] (v1.0.18) Using key: ${keyPrefix}...${keySuffix} (Length: ${apiKey.length})`);
+        console.log(`[AI] (v1.0.19) Using key: ${keyPrefix}...${keySuffix} (Length: ${apiKey.length})`);
 
-        // 5. Matrix Strategy: Try ALL permutations of Model + API Version
-        // Note: gemini-1.5-flash-8b and gemini-2.0 often REQUIRE v1beta
+        // 5. Dynamic Model Discovery
+        // Ideally, we check what models this key actually has access to
+        let discoveredModels: any[] = [];
+        try {
+            console.log("[AI] Discovering available models for key...");
+            const modelListRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            const modelJson = await modelListRes.json();
+
+            if (modelJson.models) {
+                const availableNames = modelJson.models.map((m: any) => m.name.replace("models/", ""));
+                console.log(`[AI] Discovered ${availableNames.length} models: ${availableNames.slice(0, 5).join(", ")}...`);
+
+                // Prioritize finding a "flash" or "pro" model that actually exists
+                const bestModel = availableNames.find((n: string) => n.includes("gemini-1.5-flash")) ||
+                    availableNames.find((n: string) => n.includes("gemini-1.5-pro")) ||
+                    availableNames.find((n: string) => n.includes("gemini"));
+
+                if (bestModel) {
+                    console.log(`[AI] Prioritizing discovered model: ${bestModel}`);
+                    discoveredModels.push({ id: bestModel, version: "v1beta" });
+                }
+            }
+        } catch (e) {
+            console.warn("[AI] Model discovery failed, using hardcoded matrix only.", e);
+        }
+
+        // 6. Matrix Strategy: Discovered + Hardcoded
         const modelMatrix = [
-            { id: "gemini-1.5-flash", version: "v1" },
+            ...discoveredModels,
             { id: "gemini-1.5-flash", version: "v1beta" },
+            { id: "gemini-1.5-flash", version: "v1" },
             { id: "gemini-1.5-flash-latest", version: "v1beta" },
-            { id: "gemini-1.5-flash-8b", version: "v1beta" },
-            { id: "gemini-1.5-pro", version: "v1" },
+            { id: "gemini-1.5-flash-001", version: "v1beta" },
+            { id: "gemini-1.5-flash-002", version: "v1beta" },
             { id: "gemini-1.5-pro", version: "v1beta" },
-            { id: "gemini-2.0-flash-exp", version: "v1beta" },
-            { id: "gemini-pro", version: "v1" }
+            { id: "gemini-1.0-pro", version: "v1beta" },
+            { id: "gemini-pro", version: "v1beta" }
         ];
 
         let lastError;
         const failedAttempts: any[] = [];
+        let successResponse = null;
 
         for (const config of modelMatrix) {
             try {
@@ -126,14 +153,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const text = await generateContent(apiKey, config.id, config.version, safePrompt);
                 console.log(`[AI] Success with ${config.id} (${config.version})`);
 
-                return res.status(200).json({
-                    success: true,
-                    data: {
-                        response: text,
-                        model: `${config.id} (${config.version})`,
-                        keyUsed: keyPrefix
-                    }
-                });
+                successResponse = {
+                    response: text,
+                    model: `${config.id} (${config.version})`,
+                    keyUsed: keyPrefix
+                };
+                break; // Exit loop on success
             } catch (err: any) {
                 console.warn(`[AI] Failed ${config.id} (${config.version}): ${err.message}`);
                 failedAttempts.push({
@@ -146,10 +171,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
+        if (successResponse) {
+            return res.status(200).json({ success: true, data: successResponse });
+        }
+
         // --- ULTRA DIAGNOSTIC PHASE ---
         console.error("[AI CRASH] All models failed. Running deep diagnostics...");
 
-        // 1. Check Model List
+        // Re-fetch only if needed (though we fetched above, we do it safely here for the error report)
         const modelListRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         let modelListData: any = { error: "Fetch failed" };
         try { modelListData = await modelListRes.json(); } catch { }
@@ -157,13 +186,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isServiceEnabled = modelListRes.status !== 404;
         const availableModelNames = modelListData.models?.map((m: any) => m.name.replace("models/", "")) || [];
 
-        // 2. Identify Key Source
+        // Identify Key Source
         let keySource = "UNKNOWN";
         if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith(keyPrefix)) keySource = "GEMINI_API_KEY";
         else if (process.env.VITE_GEMINI_API_KEY && process.env.VITE_GEMINI_API_KEY.startsWith(keyPrefix)) keySource = "VITE_GEMINI_API_KEY";
-
-        // 3. Check for specific model availability
-        const hasFlash = availableModelNames.some((n: string) => n.includes("flash"));
 
         return res.status(500).json({
             success: false,
@@ -173,16 +199,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 failedAttempts,
                 serviceStatus: isServiceEnabled ? "Enabled" : "404_NOT_FOUND",
                 modelCount: modelListData.models?.length || 0,
-                availableModelsSample: availableModelNames.slice(0, 10), // Show first 10
-                hasFlashModel: hasFlash,
+                // FORCE STRINGIFY to ensure it shows in client logs
+                availableModelsSample: JSON.stringify(availableModelNames.slice(0, 15)),
                 keySource: keySource,
                 keyHint: `${keyPrefix}...${keySuffix}`,
-                version: "v1.0.18",
+                version: "v1.0.19",
                 troubleshooting: {
-                    probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!availableModelNames.length ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
-                    recommendation: !isServiceEnabled
-                        ? "The API endpoint itself is returning 404. This means the Generative Language API is NOT enabled in your Google Cloud Library."
-                        : "The service is enabled but no models are returned. Check if your project has Billing enabled or if your API Key has restricted access."
+                    type: "NO_WORKING_MODELS",
+                    recommendation: "Check 'availableModelsSample' in debug. If it's empty, user has no access. If it has models, we failed to call them (quota?)."
                 }
             }
         });
