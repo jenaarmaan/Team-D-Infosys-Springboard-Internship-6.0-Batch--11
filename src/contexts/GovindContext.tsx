@@ -348,19 +348,6 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []); // Dependencies for closure safety
 
-  /* ================= NOTIFICATION DISPATCHER ================= */
-  useEffect(() => {
-    const handleNotify = (e: any) => {
-      if (assistantEnabled) {
-        speak(e.detail.text);
-      } else {
-        console.log("[GOVIND] Notification queued (waiting for assistant enable):", e.detail.text);
-      }
-    };
-
-    window.addEventListener("govind:notify", handleNotify);
-    return () => window.removeEventListener("govind:notify", handleNotify);
-  }, [assistantEnabled]); // Re-bind when enabled state changes
 
 
   useEffect(() => {
@@ -623,6 +610,20 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       rate: settings.speechRate / 50
     });
   };
+
+  /* ================= NOTIFICATION DISPATCHER ================= */
+  useEffect(() => {
+    const handleNotify = (e: any) => {
+      if (assistantEnabled) {
+        speak(e.detail.text, { cancelPrevious: true });
+      } else {
+        console.log("[GOVIND] Notification queued (waiting for assistant enable):", e.detail.text);
+      }
+    };
+
+    window.addEventListener("govind:notify", handleNotify);
+    return () => window.removeEventListener("govind:notify", handleNotify);
+  }, [assistantEnabled]);
 
   /* ------------------ WAKE UP ------------------ */
 

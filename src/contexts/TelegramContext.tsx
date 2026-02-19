@@ -115,6 +115,8 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
 
             const unsubSnap = onSnapshot(q, (snap) => {
                 console.log(`📡 [TG CONTEXT] Received ${snap.size} Firestore updates`);
+                const newMessages: any[] = [];
+
                 snap.docChanges().forEach(change => {
                     if (change.type === "added") {
                         const data = change.doc.data();
@@ -133,14 +135,29 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
                             chatType: data.chatType
                         };
                         client.updateCacheFromFirestore(upd);
+                        newMessages.push(upd);
+                    }
+                });
 
-                        if (settings.messageAlerts && data.senderId !== 0) {
+                // Batch notifications
+                if (settings.messageAlerts && newMessages.length > 0) {
+                    if (newMessages.length === 1) {
+                        const upd = newMessages[0];
+                        if (upd.senderId !== 0) {
                             window.dispatchEvent(new CustomEvent("govind:notify", {
                                 detail: { text: `Message from ${upd.senderName}: ${upd.text.substring(0, 30)}` }
                             }));
                         }
+                    } else {
+                        // Batch multiple updates
+                        const validUpdates = newMessages.filter(m => m.senderId !== 0);
+                        if (validUpdates.length > 0) {
+                            window.dispatchEvent(new CustomEvent("govind:notify", {
+                                detail: { text: `You have ${validUpdates.length} new Telegram messages.` }
+                            }));
+                        }
                     }
-                });
+                }
 
                 // Update UI directly from client cache (no API call needed for realtime)
                 const res = client.getRecentContextLocally();

@@ -96,15 +96,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         const modelMatrix = [
+            { id: "gemini-1.5-flash", version: "v1" },      // Try stable v1 first (GA)
             { id: "gemini-1.5-flash", version: "v1beta" },
             { id: "gemini-1.5-flash-latest", version: "v1beta" },
+            { id: "gemini-1.5-pro", version: "v1" },
             { id: "gemini-1.5-pro", version: "v1beta" },
-            { id: "gemini-pro", version: "v1beta" },  // Standard beta
-            { id: "gemini-pro", version: "v1" },      // STABLE V1 (Critical Fallback)
-            { id: "gemini-1.0-pro", version: "v1" }    // Specific V1
+            { id: "gemini-2.0-flash-exp", version: "v1beta" }, // Experimental but powerful
+            { id: "gemini-pro", version: "v1" },
+            { id: "gemini-pro", version: "v1beta" }
         ];
 
         let lastError;
+        const failedAttempts: any[] = [];
 
         for (const config of modelMatrix) {
             try {
@@ -117,7 +120,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     data: { response: text, model: `${config.id} (${config.version})` }
                 });
             } catch (err: any) {
-                console.warn(`[AI] Failed ${config.id} (${config.version})`);
+                console.warn(`[AI] Failed ${config.id} (${config.version}): ${err.message}`);
+                failedAttempts.push({ model: config.id, version: config.version, error: err.message });
                 lastError = err;
             }
         }
@@ -132,8 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error: "AI Services Unavailable via Backend.",
             debug: {
                 lastError: lastError?.message,
+                failedAttempts,
                 availableModels: availableModels,
-                keyHint: apiKey ? `${apiKey.substring(0, 5)}...` : 'NONE'
+                keyHint: apiKey ? `${apiKey.substring(0, 8)}...` : 'NONE'
             }
         });
 
