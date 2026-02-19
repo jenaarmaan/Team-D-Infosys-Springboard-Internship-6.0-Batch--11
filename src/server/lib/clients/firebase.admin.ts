@@ -46,5 +46,6 @@ export async function getFirebaseAdmin(): Promise<any> {
     }
 }
 
+// 4. Client Proxies
 export const getDb = async () => (await getFirebaseAdmin()).firestore();
 export const getAuth = async () => (await getFirebaseAdmin()).auth();

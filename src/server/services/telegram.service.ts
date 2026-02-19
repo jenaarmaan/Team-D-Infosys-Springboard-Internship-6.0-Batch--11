@@ -69,7 +69,7 @@ export class TelegramService {
             }
 
             // 3. Save Update (with timeout)
-            const db = getDb();
+            const db = await getDb();
             const docRef = db.collection('telegram_updates').doc(uid).collection('updates').doc(`update_${updateId}`);
 
             await Promise.race([
@@ -100,7 +100,7 @@ export class TelegramService {
     async getUpdates(uid: string): Promise<any[]> {
         console.log(`🔍 [TG SERVICE] Fetching updates for UID ${uid}`);
         try {
-            const db = getDb();
+            const db = await getDb();
             const snapshot = await Promise.race([
                 db.collection('telegram_updates')
                     .doc(uid)
@@ -120,7 +120,7 @@ export class TelegramService {
 
     private async resolveUidForChat(chatId: number): Promise<string | null> {
         try {
-            const db = getDb();
+            const db = await getDb();
             const snapshot = await db.collection('users')
                 .where('telegramChatId', '==', chatId)
                 .limit(1)
@@ -139,7 +139,7 @@ export class TelegramService {
 
     private async linkUserByEmail(chatId: number, email: string): Promise<string | null> {
         try {
-            const db = getDb();
+            const db = await getDb();
             const snapshot = await db.collection('users')
                 .where('email', '==', email)
                 .limit(1)
