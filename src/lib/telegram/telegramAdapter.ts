@@ -371,7 +371,7 @@ export const TelegramAdapter: PlatformAdapter = {
           } catch (err: any) {
             console.error("[TG DRAFT ERROR]", err);
             const msg = (err.message?.includes("not found") || err.message?.includes("404"))
-              ? "I couldn't find the AI models. Please enable 'Generative Language API' in GCP Library."
+              ? "I couldn't find the AI models. Please enable 'Generative Language API' at: https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com"
               : "Failed to generate AI suggestion.";
             return { success: false, message: msg };
           }

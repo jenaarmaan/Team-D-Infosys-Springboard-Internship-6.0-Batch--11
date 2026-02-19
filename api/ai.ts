@@ -36,8 +36,14 @@ async function generateContent(apiKey: string, model: string, version: string, p
     });
 
     if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`Google API Error (${response.status}) [${version}/${model}]: ${errorBody}`);
+        let errorHint = "";
+        try {
+            const errJson = await response.json();
+            errorHint = JSON.stringify(errJson);
+        } catch {
+            errorHint = await response.text();
+        }
+        throw new Error(`Google API Error (${response.status}) for ${model}: ${errorHint.substring(0, 150)}`);
     }
 
     const data: any = await response.json();
@@ -96,15 +102,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         const modelMatrix = [
-            { id: "gemini-1.5-flash-8b", version: "v1" },   // Extremely resilient small model
-            { id: "gemini-1.5-flash", version: "v1" },      // Stable GA
+            { id: "gemini-1.5-flash", version: "v1" },
+            { id: "gemini-1.5-flash-latest", version: "v1beta" },
             { id: "gemini-1.5-flash", version: "v1beta" },
-            { id: "gemini-1.5-flash-002", version: "v1beta" },
             { id: "gemini-1.5-pro", version: "v1" },
-            { id: "gemini-1.5-pro", version: "v1beta" },
-            { id: "gemini-2.0-flash-exp", version: "v1beta" },
+            { id: "gemini-1.5-pro-latest", version: "v1beta" },
             { id: "gemini-pro", version: "v1" },
-            { id: "gemini-pro", version: "v1beta" }
+            { id: "gemini-1.0-pro", version: "v1" }
         ];
 
         let lastError;
@@ -113,9 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         for (const config of modelMatrix) {
             try {
-                const url = `https://generativelanguage.googleapis.com/${config.version}/models/${config.id}:generateContent?key=${apiKey}`;
                 console.log(`[AI] Trying model: ${config.id} (${config.version})`);
-
                 const text = await generateContent(apiKey, config.id, config.version, safePrompt);
                 console.log(`[AI] Success with ${config.id} (${config.version})`);
 
@@ -129,26 +131,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     model: config.id,
                     version: config.version,
                     error: err.message,
-                    status: err.message.includes("404") ? 404 : (err.message.includes("403") ? 403 : 500)
+                    is404: err.message.includes("404")
                 });
                 lastError = err;
             }
         }
 
-        // --- DIAGNOSTIC PHASE ---
-        console.error("[AI CRASH] All models failed. Running diagnostics...");
-        const availableModels = await listAvailableModels(apiKey);
-        console.error(`[AI DIAGNOSTIC] Key hinted "${keyPrefix}" has access to: ${JSON.stringify(availableModels)}`);
+        // --- ULTRA DIAGNOSTIC PHASE ---
+        console.error("[AI CRASH] All models failed. Running deep diagnostics...");
+        const modelListRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const modelListData = await modelListRes.json();
+
+        const isServiceEnabled = modelListRes.status !== 404;
+        const hasModels = !!(modelListData.models && modelListData.models.length > 0);
 
         return res.status(500).json({
             success: false,
-            error: "AI Services Unavailable via Backend.",
+            error: "AI Services Configuration Issue.",
             debug: {
                 lastError: lastError?.message,
                 failedAttempts,
-                availableModels: availableModels,
+                serviceStatus: isServiceEnabled ? "Enabled" : "404_NOT_FOUND",
+                modelCount: modelListData.models?.length || 0,
                 keyHint: keyPrefix,
-                help: "If all models are 404, please search for 'Generative Language API' in the GCP Console Library and click ENABLE."
+                troubleshooting: {
+                    probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!hasModels ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
+                    recommendation: !isServiceEnabled
+                        ? "The API endpoint itself is returning 404. This means the Generative Language API is NOT enabled in your Google Cloud Library. DO NOT just enable 'Gemini API' - search for 'Generative Language API' specifically."
+                        : "The service is enabled but no models are returned. Check if your project has Billing enabled or if your API Key has restricted access."
+                }
             }
         });
 
