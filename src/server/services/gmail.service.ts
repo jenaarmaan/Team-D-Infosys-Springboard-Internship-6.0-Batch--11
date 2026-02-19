@@ -161,9 +161,11 @@ class GmailService {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                console.error(`❌ [GMAIL SEND HTTP ERROR] Status: ${response.status}, Body: ${errorText}`);
                 throw new Error(`Gmail API Send Error: ${response.status} - ${errorText}`);
             }
 
+            console.log(`✅ [GMAIL SEND SUCCESS] Status: ${response.status}`);
             return await response.json();
         } catch (error: any) {
             if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
