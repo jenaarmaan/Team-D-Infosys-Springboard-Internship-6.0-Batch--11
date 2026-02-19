@@ -100,20 +100,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ error: 'Server AI Key Missing' });
         }
 
+        const keyPrefix = apiKey.substring(0, 10);
+        console.log(`[AI] Using key starting with: ${keyPrefix}...`);
+
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
+        // Note: gemini-1.5-flash-8b and gemini-2.0 often REQUIRE v1beta
         const modelMatrix = [
             { id: "gemini-1.5-flash", version: "v1" },
-            { id: "gemini-1.5-flash-latest", version: "v1beta" },
             { id: "gemini-1.5-flash", version: "v1beta" },
+            { id: "gemini-1.5-flash-latest", version: "v1beta" },
+            { id: "gemini-1.5-flash-8b", version: "v1beta" },
             { id: "gemini-1.5-pro", version: "v1" },
-            { id: "gemini-1.5-pro-latest", version: "v1beta" },
-            { id: "gemini-pro", version: "v1" },
-            { id: "gemini-1.0-pro", version: "v1" }
+            { id: "gemini-1.5-pro", version: "v1beta" },
+            { id: "gemini-2.0-flash-exp", version: "v1beta" },
+            { id: "gemini-pro", version: "v1" }
         ];
 
         let lastError;
         const failedAttempts: any[] = [];
-        const keyPrefix = apiKey.substring(0, 8);
 
         for (const config of modelMatrix) {
             try {
@@ -123,7 +127,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
                 return res.status(200).json({
                     success: true,
-                    data: { response: text, model: `${config.id} (${config.version})`, keyHint: keyPrefix }
+                    data: {
+                        response: text,
+                        model: `${config.id} (${config.version})`,
+                        keyUsed: keyPrefix
+                    }
                 });
             } catch (err: any) {
                 console.warn(`[AI] Failed ${config.id} (${config.version}): ${err.message}`);
@@ -140,7 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // --- ULTRA DIAGNOSTIC PHASE ---
         console.error("[AI CRASH] All models failed. Running deep diagnostics...");
         const modelListRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        const modelListData = await modelListRes.json();
+        let modelListData: any = { error: "Fetch failed" };
+        try { modelListData = await modelListRes.json(); } catch { }
 
         const isServiceEnabled = modelListRes.status !== 404;
         const hasModels = !!(modelListData.models && modelListData.models.length > 0);
@@ -157,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 troubleshooting: {
                     probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!hasModels ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
                     recommendation: !isServiceEnabled
-                        ? "The API endpoint itself is returning 404. This means the Generative Language API is NOT enabled in your Google Cloud Library. DO NOT just enable 'Gemini API' - search for 'Generative Language API' specifically."
+                        ? "The API endpoint itself is returning 404. This means the Generative Language API is NOT enabled in your Google Cloud Library."
                         : "The service is enabled but no models are returned. Check if your project has Billing enabled or if your API Key has restricted access."
                 }
             }

@@ -38,17 +38,17 @@ export async function callGemini(prompt: string): Promise<string> {
             throw new Error("AI_KEY_MISSING_IN_PRODUCTION");
         }
 
-        console.log(`[AI] Using frontend fallback key starting with: ${apiKey.substring(0, 8)}...`);
+        const keyPrefix = apiKey.substring(0, 10);
+        console.log(`[AI] Using frontend fallback key starting with: ${keyPrefix}...`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelMatrix = [
-            { id: "gemini-1.5-flash-8b", version: "v1" },
             { id: "gemini-1.5-flash", version: "v1" },
             { id: "gemini-1.5-flash", version: "v1beta" },
-            { id: "gemini-1.5-flash-002", version: "v1beta" },
+            { id: "gemini-1.5-flash-latest", version: "v1beta" },
+            { id: "gemini-1.5-flash-8b", version: "v1beta" },
             { id: "gemini-1.5-pro", version: "v1" },
-            { id: "gemini-pro", version: "v1" },
-            { id: "gemini-1.0-pro", version: "v1" }
+            { id: "gemini-pro", version: "v1" }
         ];
 
         let lastError: any;
@@ -64,7 +64,7 @@ export async function callGemini(prompt: string): Promise<string> {
                         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
                         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
                     ]
-                }, { apiVersion: config.version }); // 🚀 Try different versions explicitly
+                }, { apiVersion: config.version });
 
                 const systemInstruction = "You are Govind, a secure and controlled voice assistant. Your responses must be concise and optimized for text-to-speech output.";
                 const fullPrompt = `${systemInstruction}\n\nUser Request: ${prompt}`;
@@ -83,7 +83,7 @@ export async function callGemini(prompt: string): Promise<string> {
         console.error("[AI] All Frontend Fallback attempts failed:", fallbackErr);
 
         if (fallbackErr.message?.includes("API_KEY_SERVICE_BLOCKED") || fallbackErr.message?.includes("403")) {
-            throw new Error("AI Service Blocked: The browser-side API key is restricted. Please enable 'Generative Language API' in Google Cloud Console.");
+            throw new Error("AI Service Blocked: The browser-side API key is restricted. Please enable 'Generative Language API' at https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com");
         }
 
         throw fallbackErr;
