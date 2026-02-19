@@ -30,7 +30,7 @@ export async function sendEmail(to: string, subject: string, body: string) {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    const response = await fetch('https://gmail.googleapis.com/v1/users/me/messages/send', {
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -78,7 +78,7 @@ export async function replyToEmail(threadId: string, to: string, subject: string
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    const response = await fetch('https://gmail.googleapis.com/v1/users/me/messages/send', {
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
