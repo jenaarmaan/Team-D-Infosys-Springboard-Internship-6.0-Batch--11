@@ -80,6 +80,7 @@ class ApiClient {
                         code: "SERVER_ERROR",
                         message: data.message || "An unexpected error occurred",
                     },
+                    ...data // 🚀 Preserve debug, failedAttempts, etc from backend
                 };
             }
 

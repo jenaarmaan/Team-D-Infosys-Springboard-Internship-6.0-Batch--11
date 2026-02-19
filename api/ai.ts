@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const keyPrefix = apiKey.substring(0, 10);
         const keySuffix = apiKey.substring(apiKey.length - 4);
-        console.log(`[AI] (v1.0.16) Using key: ${keyPrefix}...${keySuffix}`);
+        console.log(`[AI] (v1.0.17) Using key: ${keyPrefix}...${keySuffix} (Length: ${apiKey.length})`);
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         // Note: gemini-1.5-flash-8b and gemini-2.0 often REQUIRE v1beta
@@ -164,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 serviceStatus: isServiceEnabled ? "Enabled" : "404_NOT_FOUND",
                 modelCount: modelListData.models?.length || 0,
                 keyHint: `${keyPrefix}...${keySuffix}`,
-                version: "v1.0.15",
+                version: "v1.0.17",
                 troubleshooting: {
                     probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!hasModels ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
                     recommendation: !isServiceEnabled
