@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const keyPrefix = apiKey.substring(0, 10);
         const keySuffix = apiKey.substring(apiKey.length - 4);
-        console.log(`[AI] (v1.0.17) Using key: ${keyPrefix}...${keySuffix} (Length: ${apiKey.length})`);
+        console.log(`[AI] (v1.0.18) Using key: ${keyPrefix}...${keySuffix} (Length: ${apiKey.length})`);
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         // Note: gemini-1.5-flash-8b and gemini-2.0 often REQUIRE v1beta
@@ -148,12 +148,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // --- ULTRA DIAGNOSTIC PHASE ---
         console.error("[AI CRASH] All models failed. Running deep diagnostics...");
+
+        // 1. Check Model List
         const modelListRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         let modelListData: any = { error: "Fetch failed" };
         try { modelListData = await modelListRes.json(); } catch { }
 
         const isServiceEnabled = modelListRes.status !== 404;
-        const hasModels = !!(modelListData.models && modelListData.models.length > 0);
+        const availableModelNames = modelListData.models?.map((m: any) => m.name.replace("models/", "")) || [];
+
+        // 2. Identify Key Source
+        let keySource = "UNKNOWN";
+        if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith(keyPrefix)) keySource = "GEMINI_API_KEY";
+        else if (process.env.VITE_GEMINI_API_KEY && process.env.VITE_GEMINI_API_KEY.startsWith(keyPrefix)) keySource = "VITE_GEMINI_API_KEY";
+
+        // 3. Check for specific model availability
+        const hasFlash = availableModelNames.some((n: string) => n.includes("flash"));
 
         return res.status(500).json({
             success: false,
@@ -163,10 +173,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 failedAttempts,
                 serviceStatus: isServiceEnabled ? "Enabled" : "404_NOT_FOUND",
                 modelCount: modelListData.models?.length || 0,
+                availableModelsSample: availableModelNames.slice(0, 10), // Show first 10
+                hasFlashModel: hasFlash,
+                keySource: keySource,
                 keyHint: `${keyPrefix}...${keySuffix}`,
-                version: "v1.0.17",
+                version: "v1.0.18",
                 troubleshooting: {
-                    probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!hasModels ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
+                    probableCause: !isServiceEnabled ? "API_NOT_ENABLED" : (!availableModelNames.length ? "NO_MODELS_FOR_KEY" : "MODEL_VERSION_MISMATCH"),
                     recommendation: !isServiceEnabled
                         ? "The API endpoint itself is returning 404. This means the Generative Language API is NOT enabled in your Google Cloud Library."
                         : "The service is enabled but no models are returned. Check if your project has Billing enabled or if your API Key has restricted access."

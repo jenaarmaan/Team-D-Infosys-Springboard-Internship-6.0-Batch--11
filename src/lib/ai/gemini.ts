@@ -56,7 +56,7 @@ export async function callGemini(prompt: string): Promise<string> {
 
     const keyPrefix = apiKey.substring(0, 10);
     const keySuffix = apiKey.substring(apiKey.length - 4);
-    console.log(`[AI] (v1.0.17) Using local direct key: ${keyPrefix}...${keySuffix}`);
+    console.log(`[AI] (v1.0.18) Using local direct key: ${keyPrefix}...${keySuffix}`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const modelMatrix = [
