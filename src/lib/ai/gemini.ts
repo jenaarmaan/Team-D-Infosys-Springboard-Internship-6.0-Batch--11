@@ -22,6 +22,11 @@ export async function callGemini(prompt: string): Promise<string> {
         console.log("[AI] Attempting backend Gemini call...");
         const result = await apiClient.post<{ response: string }>("/api/v1/ai", { prompt });
         if (result.success) return result.data.response;
+
+        // Handle diagnostic payload from backend
+        if ((result as any).debug) {
+            console.warn("[AI] Backend call failed with diagnostics:", (result as any).debug);
+        }
         console.warn("[AI] Backend call failed, falling back to frontend direct call.");
     } catch (err) {
         console.error("[AI] Backend call crashed, falling back to frontend direct call.", err);

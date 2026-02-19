@@ -711,6 +711,10 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
       } catch (err: any) {
         console.error("❌ [AI SUMMARY ERROR]:", err);
 
+        if (err.debug) {
+          console.log("[SUMMARY DEBUG] Backend Diagnostics:", JSON.stringify(err.debug, null, 2));
+        }
+
         const errorMessage = err.message || "";
         let speechMsg = "I'm having trouble analyzing this conversation right now.";
 
