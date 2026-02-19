@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const keyPrefix = apiKey.substring(0, 10);
         const keySuffix = apiKey.substring(apiKey.length - 4);
-        console.log(`[AI] (v1.0.15) Using key: ${keyPrefix}...${keySuffix}`);
+        console.log(`[AI] (v1.0.16) Using key: ${keyPrefix}...${keySuffix}`);
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         // Note: gemini-1.5-flash-8b and gemini-2.0 often REQUIRE v1beta

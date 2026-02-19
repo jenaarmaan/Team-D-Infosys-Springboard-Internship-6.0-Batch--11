@@ -724,7 +724,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
         } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
           // Handle "Model not found" specifically
-          speechMsg = "I couldn't find the AI models. This usually means the API Key being used by Vercel doesn't match your active project. Please verify the key in your Vercel Settings matches your AI Studio dashboard exactly, then redeploy without build cache. (System v1.0.15)";
+          speechMsg = "I couldn't find the AI models. This usually means the API Key being used by Vercel doesn't match your active project. (System v1.0.16)";
         }
 
         telegram.updateSummary(speechMsg);
