@@ -39,7 +39,8 @@ export async function callGemini(prompt: string): Promise<string> {
         }
 
         const keyPrefix = apiKey.substring(0, 10);
-        console.log(`[AI] Using frontend fallback key starting with: ${keyPrefix}...`);
+        const keySuffix = apiKey.substring(apiKey.length - 4);
+        console.log(`[AI] (v1.0.15) Using frontend fallback key: ${keyPrefix}...${keySuffix}`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelMatrix = [
