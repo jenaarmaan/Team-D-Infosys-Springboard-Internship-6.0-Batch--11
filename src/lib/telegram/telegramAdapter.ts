@@ -369,7 +369,11 @@ export const TelegramAdapter: PlatformAdapter = {
               }
             };
           } catch (err: any) {
-            return { success: false, message: "Failed to generate AI suggestion." };
+            console.error("[TG DRAFT ERROR]", err);
+            const msg = (err.message?.includes("not found") || err.message?.includes("404"))
+              ? "I couldn't find the AI models. Please enable 'Generative Language API' in GCP Library."
+              : "Failed to generate AI suggestion.";
+            return { success: false, message: msg };
           }
         }
 

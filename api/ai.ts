@@ -96,32 +96,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 5. Matrix Strategy: Try ALL permutations of Model + API Version
         const modelMatrix = [
-            { id: "gemini-1.5-flash", version: "v1" },      // Try stable v1 first (GA)
+            { id: "gemini-1.5-flash-8b", version: "v1" },   // Extremely resilient small model
+            { id: "gemini-1.5-flash", version: "v1" },      // Stable GA
             { id: "gemini-1.5-flash", version: "v1beta" },
-            { id: "gemini-1.5-flash-latest", version: "v1beta" },
+            { id: "gemini-1.5-flash-002", version: "v1beta" },
             { id: "gemini-1.5-pro", version: "v1" },
             { id: "gemini-1.5-pro", version: "v1beta" },
-            { id: "gemini-2.0-flash-exp", version: "v1beta" }, // Experimental but powerful
+            { id: "gemini-2.0-flash-exp", version: "v1beta" },
             { id: "gemini-pro", version: "v1" },
             { id: "gemini-pro", version: "v1beta" }
         ];
 
         let lastError;
         const failedAttempts: any[] = [];
+        const keyPrefix = apiKey.substring(0, 8);
 
         for (const config of modelMatrix) {
             try {
+                const url = `https://generativelanguage.googleapis.com/${config.version}/models/${config.id}:generateContent?key=${apiKey}`;
                 console.log(`[AI] Trying model: ${config.id} (${config.version})`);
+
                 const text = await generateContent(apiKey, config.id, config.version, safePrompt);
                 console.log(`[AI] Success with ${config.id} (${config.version})`);
 
                 return res.status(200).json({
                     success: true,
-                    data: { response: text, model: `${config.id} (${config.version})` }
+                    data: { response: text, model: `${config.id} (${config.version})`, keyHint: keyPrefix }
                 });
             } catch (err: any) {
                 console.warn(`[AI] Failed ${config.id} (${config.version}): ${err.message}`);
-                failedAttempts.push({ model: config.id, version: config.version, error: err.message });
+                failedAttempts.push({
+                    model: config.id,
+                    version: config.version,
+                    error: err.message,
+                    status: err.message.includes("404") ? 404 : (err.message.includes("403") ? 403 : 500)
+                });
                 lastError = err;
             }
         }
@@ -129,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // --- DIAGNOSTIC PHASE ---
         console.error("[AI CRASH] All models failed. Running diagnostics...");
         const availableModels = await listAvailableModels(apiKey);
-        console.error(`[AI DIAGNOSTIC] Key has access to: ${JSON.stringify(availableModels)}`);
+        console.error(`[AI DIAGNOSTIC] Key hinted "${keyPrefix}" has access to: ${JSON.stringify(availableModels)}`);
 
         return res.status(500).json({
             success: false,
@@ -138,7 +147,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 lastError: lastError?.message,
                 failedAttempts,
                 availableModels: availableModels,
-                keyHint: apiKey ? `${apiKey.substring(0, 8)}...` : 'NONE'
+                keyHint: keyPrefix,
+                help: "If all models are 404, please search for 'Generative Language API' in the GCP Console Library and click ENABLE."
             }
         });
 

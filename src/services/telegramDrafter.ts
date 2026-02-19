@@ -45,6 +45,6 @@ export async function generateTelegramDraft(history: any[], chatTitle: string): 
         };
     } catch (e) {
         console.error("Failed to generate AI telegram draft:", e);
-        return { body: "I've received your messages and will get back to you soon." };
+        throw e; // Push error up for descriptive troubleshooting
     }
 }

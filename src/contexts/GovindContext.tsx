@@ -720,7 +720,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           speechMsg = "AI access is currently restricted. Please check your API key settings in Google Cloud.";
         } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
           // Handle "Model not found" specifically, which often means API not enabled or billing missing
-          speechMsg = "I couldn't access the AI model. Please ensure the 'Generative Language API' is enabled and Billing is active in Google Cloud.";
+          speechMsg = "I couldn't find the AI models. Please go to your Google Cloud Console, click 'Library', search for 'Generative Language API' and ensure it's Enabled. Alternatively, use a key from Google AI Studio.";
         }
 
         telegram.updateSummary(speechMsg);
