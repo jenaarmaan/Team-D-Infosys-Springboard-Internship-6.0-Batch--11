@@ -24,7 +24,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 const requestedLimit = limit ? parseInt(limit as string) : 20;
                 const safeLimit = Math.min(requestedLimit, 50);
 
-                const emails = await gmailService.listEmails(accessToken, {
+                const emails = await gmailService.listEmails(uid, accessToken, {
                     limit: safeLimit,
                     unread: unread === 'true',
                     q: query as string
@@ -40,7 +40,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
             case 'get': {
                 const { id } = req.query;
                 if (!id) throw new Error('Email ID missing');
-                const email = await gmailService.getEmail(accessToken, id as string);
+                const email = await gmailService.getEmail(uid, accessToken, id as string);
                 return res.status(200).json({
                     success: true,
                     data: { messages: email ? [email] : [] },
@@ -53,7 +53,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 const { messageId } = reqBody || {};
 
                 if (!messageId) throw new Error('Message ID missing');
-                await gmailService.markAsRead(accessToken, messageId);
+                await gmailService.markAsRead(uid, accessToken, messageId);
                 return res.status(200).json({
                     success: true,
                     data: { messages: [] },
@@ -66,7 +66,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 const { to, subject, body } = reqBody || {};
 
                 if (!to || !subject || !body) throw new Error('Missing sending parameters');
-                const result = await gmailService.sendEmail(accessToken, { to, subject, body });
+                const result = await gmailService.sendEmail(uid, accessToken, { to, subject, body });
                 return res.status(200).json({
                     success: true,
                     data: result
@@ -78,7 +78,7 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
                 const { threadId, to, subject, body } = reqBody || {};
 
                 if (!threadId || !to || !subject || !body) throw new Error('Missing reply parameters');
-                const result = await gmailService.replyEmail(accessToken, { threadId, to, subject, body });
+                const result = await gmailService.replyEmail(uid, accessToken, { threadId, to, subject, body });
                 return res.status(200).json({
                     success: true,
                     data: result
