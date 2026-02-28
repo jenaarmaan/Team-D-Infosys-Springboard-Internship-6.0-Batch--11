@@ -210,9 +210,23 @@ export const GmailAdapter: PlatformAdapter = {
                     return { success: true, message: `Email sent to ${to}.` };
                 }
 
-                case "OPEN_PLATFORM": {
-                    return { success: true, message: "Opening Gmail interface." };
+                case "REFRESH": {
+                    return { success: true, message: "Refreshing your emails...", data: { type: "REFRESH" } };
                 }
+
+                case "VIEW_FOLDER": {
+                    const folder = intent.entities?.query || "inbox";
+                    return {
+                        success: true,
+                        message: `Opening your ${folder}.`,
+                        data: { type: "NAVIGATE_FOLDER", folder }
+                    };
+                }
+
+                case "OPEN_PLATFORM": {
+                    return { success: true, message: "Opening Gmail interface.", data: { path: "/gmail" } };
+                }
+
 
                 default:
                     return {

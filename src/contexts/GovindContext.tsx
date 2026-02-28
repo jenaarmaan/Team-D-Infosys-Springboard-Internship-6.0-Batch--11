@@ -1170,6 +1170,23 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           setComposeStep("TO");
         }
 
+        if (result.data?.type === "REFRESH") {
+          if (intent.platform === "gmail") gmail.fetchInboxViaOAuth();
+          if (intent.platform === "telegram") telegram.fetchChats();
+        }
+
+
+        if (result.data?.type === "NAVIGATE_FOLDER" && intent.platform === "gmail") {
+          const folder = result.data.folder || "inbox";
+          gmail.changeSection(folder);
+          setRouteIntent("/gmail");
+        }
+
+        if (intent.action === "OPEN_PLATFORM" && intent.platform === "gmail") {
+          setRouteIntent("/gmail");
+        }
+
+
         if (result.data?.type === "OPEN_COMPOSE_REPLY") {
           const { to, subject, body, chatId, privacyInfo } = result.data;
           composeDataRef.current = { to, subject: subject || "Reply via Telegram", body: body || "", chatId, privacyInfo: privacyInfo || [] };

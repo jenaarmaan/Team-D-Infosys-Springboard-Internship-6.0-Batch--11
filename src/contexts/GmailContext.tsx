@@ -400,8 +400,13 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
   }, [currentSection, oauthConnected]);
 
   const changeSection = async (section: string) => {
-    setCurrentSection(section);
+    if (section === currentSection) {
+      await fetchInboxViaOAuth();
+    } else {
+      setCurrentSection(section);
+    }
   };
+
 
   const clearError = () => setError(null);
   const updateReplyDraft = (text: string) => setReplyDraft(text);

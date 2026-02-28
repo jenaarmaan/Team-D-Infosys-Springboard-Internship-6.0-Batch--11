@@ -244,6 +244,14 @@ export const TelegramAdapter: PlatformAdapter = {
           }
         }
 
+        case "REFRESH": {
+          return {
+            success: true,
+            message: "Refreshing your Telegram chats.",
+            data: { type: "REFRESH" }
+          };
+        }
+
         case "VIEW_FOLDER": {
           return {
             success: true,
@@ -251,6 +259,7 @@ export const TelegramAdapter: PlatformAdapter = {
             data: { type: "NAVIGATE_CHATS" }
           };
         }
+
 
         case "OPEN_PLATFORM": {
           // Open/Connect to Telegram or specific chat

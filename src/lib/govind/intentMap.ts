@@ -15,6 +15,7 @@ export type IntentAction =
   | "EXIT"
   | "CONFIRM"
   | "CANCEL"
+  | "REFRESH"
   | "UNKNOWN";
 
 export type TargetPlatform = "gmail" | "outlook" | "telegram" | "system";
@@ -83,6 +84,7 @@ const intentPatterns: { action: IntentAction; platform: TargetPlatform; keywords
   { action: "REGISTER", platform: "system", keywords: ["register", "sign up", "create account"] },
   { action: "LOGOUT", platform: "system", keywords: ["logout", "sign out"] },
   { action: "EXIT", platform: "system", keywords: ["exit", "stop", "close", "sleep"] },
+  { action: "REFRESH", platform: "system", keywords: ["refresh", "reload", "update list", "sync"] },
 ];
 
 /**

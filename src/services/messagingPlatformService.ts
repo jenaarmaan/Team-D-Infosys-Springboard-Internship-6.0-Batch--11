@@ -62,16 +62,17 @@ class MessagingPlatformService {
             return { success: true, message: "Action cancelled. I've discarded the draft." };
         }
 
-        // 2. Track platform context
+        // 2. Track platform context & Routing
+        let targetPlatform = intent.platform;
         if (intent.platform !== "system") {
             this.activePlatform = intent.platform;
         } else if (this.activePlatform) {
-            // If system intent but we have an active platform, maybe we should use it?
-            // For now, only explicit platform intents change the context.
+            targetPlatform = this.activePlatform;
         }
 
         // 3. Route to platform
-        const result = await routeToPlatform(intent);
+        const result = await routeToPlatform({ ...intent, platform: targetPlatform });
+
 
         // 4. Handle Draft Flow (Interception)
         if (result.success && result.data?.type === "DRAFT") {
