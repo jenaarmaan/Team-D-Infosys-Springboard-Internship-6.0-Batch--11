@@ -253,6 +253,8 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     }
     setAuthMode(null);
     setAuthStep("IDLE");
+    registrationDataRef.current = {};
+    loginDataRef.current = {};
     setVoiceMode("GLOBAL");
     setState("DORMANT");
     setIsAssistantOpen(false);
@@ -451,7 +453,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     if (authMode === "REGISTER" && authStep === "COMPLETE") {
       (async () => {
         try {
-          const { email, password, voicePin, faceImage } =
+          const { email, password, appPassword, voicePin, faceImage } =
             registrationDataRef.current as RegistrationSession;
 
           if (!email || !password || !voicePin || !faceImage) {
@@ -464,6 +466,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           const regResult = await completeRegistration({
             email,
             password,
+            appPassword,
             voicePinHash,
             faceImage,
           });
@@ -472,6 +475,14 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
             speak(`Registration failed: ${regResult.error}. Please try again or say register to restart.`);
             setAuthStep("EMAIL"); // Back to start or handle better?
             return;
+          }
+
+          // 🔐 Finalize Biometric Anchor in local vault
+          const tempAnchor = sessionStorage.getItem("govind_temp_anchor");
+          if (tempAnchor) {
+            localStorage.setItem(`govind_face_${regResult.uid}`, tempAnchor);
+            sessionStorage.removeItem("govind_temp_anchor");
+            console.log("[AUTH] Biometric anchor tied to UID:", regResult.uid);
           }
 
           createSession({

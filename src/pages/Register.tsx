@@ -128,6 +128,10 @@ const Register = () => {
       const file = new File([blob], "face_anchor.jpg", { type: "image/jpeg" });
       setRegistrationFaceImage(file);
 
+      // 🔐 Temporarily store base64 for local biometric anchor
+      const base64 = canvas.toDataURL("image/jpeg", 0.95);
+      sessionStorage.setItem("govind_temp_anchor", base64);
+
       // 🔐 Advance flow
       window.dispatchEvent(new CustomEvent("govind:face", {
         detail: { result: "FACE_OK" }

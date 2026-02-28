@@ -22,6 +22,7 @@ export interface UserProfile {
     faceImageUrl?: string;
     voicePinEnabled: boolean;
     voicePinHash?: string;
+    gmailAppPassword?: string;
   };
 
 
@@ -184,13 +185,26 @@ export const markFaceRegistered = async (uid: string, faceImageUrl: string): Pro
   try {
     await updateDoc(doc(db, "users", uid), {
       "security.faceRegistered": true,
-      "security.faceImageUrl": "LOCAL",
+      "security.faceImageUrl": faceImageUrl || "LOCAL",
     });
-    console.log("[FIRESTORE] Face marked as registered (LOCAL) for user:", uid);
+    console.log("[FIRESTORE] Face marked as registered for user:", uid);
   } catch (error) {
     console.error("[FIRESTORE] Failed to mark face registered:", uid, error);
     throw error;
   }
+};
+
+/**
+ * Store Gmail App Password
+ */
+export const updateGmailAppPassword = async (
+  uid: string,
+  appPassword: string
+): Promise<void> => {
+  await updateDoc(doc(db, "users", uid), {
+    "security.gmailAppPassword": appPassword,
+    "connectedApps.gmail": true,
+  });
 };
 
 

@@ -3,6 +3,7 @@ export type AuthMode = "NONE" | "LOGIN" | "REGISTER" | "LOGOUT";
 export type LoginStep =
   | "EMAIL"
   | "PASSWORD"
+  | "CONFIRM_LOGIN_PASSWORD"
   | "FACE"
   | "VOICE_PIN"
   | "SUCCESS";

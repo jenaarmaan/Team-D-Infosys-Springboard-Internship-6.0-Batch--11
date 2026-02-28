@@ -39,10 +39,10 @@ export const handleRegisterSpeech = (
         speak("Great. Now, please say your password.");
       } else if (step === "CONFIRM_PASSWORD") {
         setStep("APP_PASSWORD");
-        speak("Got it. Now please say your Google App Password for Gmail integration.");
+        speak("Got it. Now please say your 16 character Google App Password for Gmail integration. This helps me send emails for you.");
       } else if (step === "CONFIRM_APP_PASSWORD") {
         setStep("FACE");
-        speak("Got it. Now I need to capture your face. Please look at the camera and click Capture Face.");
+        speak("Understood. Now I need to capture your face for biometric identity. Please look at the camera and click Capture Face.");
       } else if (step === "CONFIRM_VOICE_PIN") {
         setStep("COMPLETE");
         speak("Finalizing your secure registration.");
@@ -88,7 +88,7 @@ export const handleRegisterSpeech = (
     case "PASSWORD": {
       setSession((prev) => ({ ...prev, password: text }));
       setStep("CONFIRM_PASSWORD");
-      speak(`I captured your password. You said: ${text}. Is that correct?`);
+      speak(`I captured your password. Is that correct?`);
       return;
     }
 
@@ -97,7 +97,7 @@ export const handleRegisterSpeech = (
       const cleanAppPwd = text.replace(/\s/g, "");
       setSession((prev) => ({ ...prev, appPassword: cleanAppPwd }));
       setStep("CONFIRM_APP_PASSWORD");
-      speak(`App Password received: ${text}. Is that correct?`);
+      speak(`App Password received. Is that correct?`);
       return;
     }
 
@@ -149,8 +149,25 @@ export const handleLoginSpeech = (
 
     case "PASSWORD": {
       loginDataRef.current.password = text;
-      setStep("FACE");
-      speak("Password captured. Looking for your face now.");
+      setStep("CONFIRM_LOGIN_PASSWORD");
+      speak("I captured your password. Is that correct?");
+      return;
+    }
+
+    case "CONFIRM_LOGIN_PASSWORD": {
+      const normalizedText = text.toLowerCase().trim();
+      const isYes = normalizedText.includes("yes") || normalizedText.includes("correct") || normalizedText.includes("yeah");
+      const isNo = normalizedText.includes("no") || normalizedText.includes("incorrect") || normalizedText.includes("wrong");
+
+      if (isYes) {
+        setStep("FACE");
+        speak("Password confirmed. Looking for your face now.");
+      } else if (isNo) {
+        setStep("PASSWORD");
+        speak("No problem. Please say your password again.");
+      } else {
+        speak("Please say yes to confirm or no to try again.");
+      }
       return;
     }
 
@@ -167,7 +184,5 @@ export const handleLoginSpeech = (
       setStep("SUCCESS");
       return;
     }
-
-
   }
 };

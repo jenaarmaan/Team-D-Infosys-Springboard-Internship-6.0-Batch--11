@@ -37,15 +37,17 @@ type RegistrationErrorCode =
 export const completeRegistration = async ({
   email,
   password,
+  appPassword,
   voicePinHash,
   faceImage,
 }: {
   email: string;
   password: string;
+  appPassword?: string;
   voicePinHash: string;
   faceImage: File;
 }): Promise<
-  | { status: "OK" }
+  | { status: "OK"; uid: string }
   | {
     status: "FAIL";
     error: string;
@@ -167,11 +169,24 @@ export const completeRegistration = async ({
       };
     }
 
+    /* ================= STEP 6 ================= */
+    if (appPassword) {
+      currentStep = "STORE_APP_PASSWORD";
+      console.log("[REGISTRATION] Step 6: Storing Gmail App Password");
+      try {
+        const { updateGmailAppPassword } = await import("@/lib/firebase/users");
+        await updateGmailAppPassword(uid, appPassword);
+      } catch (err) {
+        console.error("Failed to store app password:", err);
+        // Non-fatal, but we should log it
+      }
+    }
+
     console.log("[REGISTRATION] ✅ Registration successful");
 
     return {
       status: "OK",
-
+      uid
     };
   } catch (err: any) {
     console.error(
