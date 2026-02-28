@@ -201,19 +201,18 @@ const Gmail = () => {
                 <Mic className="w-4 h-4" />
               </Button>
 
-              {/* <Button
-  variant="ghost"
-  size="icon"
-  // onClick={() => {
-  //   if (oauthConnected) {
-  //     fetchInboxViaOAuth();
-  //   } else {
-  //     refreshInbox?.();
-  //   }
-  // }}
->
-  <RefreshCcw className="w-4 h-4" />
-</Button> */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  if (oauthConnected) {
+                    fetchInboxViaOAuth();
+                  }
+                }}
+                disabled={loading}
+              >
+                <RefreshCcw className={cn("w-4 h-4", loading && "animate-spin")} />
+              </Button>
 
 
               {/* 🔐 ONE-TIME OAUTH */}

@@ -277,6 +277,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const fetchInboxViaOAuth = async () => {
+    // 1. Clear existing list to show loading state for new section
+    setInboxEmails([]);
     setLoading(true);
     let token = "";
 
@@ -290,20 +292,24 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // 1. Map section to query
-    let query = "is:unread in:inbox";
+    // 2. Map section to query
+    let query = "in:inbox";
     if (currentSection === "starred") query = "is:starred";
     else if (currentSection === "sent") query = "in:sent";
     else if (currentSection === "drafts") query = "in:draft";
     else if (currentSection === "trash") query = "in:trash";
     else if (currentSection === "spam") query = "in:spam";
-    else if (currentSection === "inbox") query = "in:inbox";
+    else if (currentSection === "inbox") {
+      // Only show unread in "Inbox" if requested, otherwise show all
+      // For now, let's keep it consistent with the UI "Unread Inbox"
+      query = "in:inbox is:unread";
+    }
 
     try {
-      // 2. Fetch via Secure Proxy
-      console.log("[GMAIL] Attempting backend fetch for section:", currentSection);
+      // 3. Fetch via Secure Proxy
+      console.log(`[GMAIL] Fetching section: ${currentSection} (Query: ${query})`);
       const result = await apiClient.get<any>(
-        `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox'}&query=${encodeURIComponent(query)}`,
+        `/api/v1/gmail?action=list&limit=50&unread=${currentSection === 'inbox' && !query.includes('is:unread')}&query=${encodeURIComponent(query)}`,
         { googleToken: token }
       );
 
@@ -490,6 +496,14 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         tone,
       });
       setReplyDraft(reply.draft);
+
+      // Also update composeData so the privacy layer can acknowledge it in UI
+      setComposeData((prev: any) => ({
+        ...prev,
+        body: reply.draft,
+        privacyInfo: reply.privacyInfo
+      }));
+
     } catch (err: any) {
       setError(err.message || "Failed to generate reply");
     } finally {
@@ -535,12 +549,19 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [currentSection]);
 
-  // 🔄 BACKGROUND POLLING (REMOVED FOR PRODUCTION SECURITY)
-  // Background polling is disabled to prevent direct external API calls from the frontend.
-  // Real-time updates should be handled via server-side push or webhooks.
+  // 🔄 BACKGROUND POLLING (RE-ENABLED FOR LIVE UPDATES)
   useEffect(() => {
-    console.warn("[GMAIL] Background polling disabled for production migration.");
-  }, []);
+    if (!oauthConnected) return;
+
+    const poll = async () => {
+      if (document.hidden) return;
+      console.log("[GMAIL] Background polling for new messages...");
+      fetchInboxViaOAuth();
+    };
+
+    const interval = setInterval(poll, 60000); // Check every 60 seconds
+    return () => clearInterval(interval);
+  }, [oauthConnected, currentSection]);
 
   const changeSection = async (section: string) => {
     setCurrentSection(section);

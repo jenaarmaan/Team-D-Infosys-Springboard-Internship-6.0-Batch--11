@@ -3,6 +3,7 @@
 import { detectSensitiveData } from "@/privacy/detector";
 import { sanitize } from "@/privacy/sanitizer";
 import { SanitizedResult } from "@/privacy/entities";
+import { federatedPrivacy } from "@/privacy/federated";
 
 import { apiClient } from "@/api/client";
 
@@ -105,6 +106,17 @@ export async function callGemini(prompt: string): Promise<string> {
 export async function callGeminiSecurely(rawPrompt: string): Promise<{ response: string; privacy: SanitizedResult }> {
     const spans = detectSensitiveData(rawPrompt);
     const sanitized = sanitize(rawPrompt, spans);
+
+    // 🔥 Federated Learning: Record that sensitive data was detected and handled
+    if (sanitized.entities.length > 0) {
+        sanitized.entities.forEach(entity => {
+            federatedPrivacy.recordFeedback({
+                entityType: entity.type,
+                originalValue: "[MASKED_BY_INPUT_SANITIZER]", // Never record the actual value
+                isCorrect: true
+            });
+        });
+    }
 
     console.log("[PRIVACY] Calling Gemini with sanitized prompt.");
     const response = await callGemini(sanitized.sanitizedText);

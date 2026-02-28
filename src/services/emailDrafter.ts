@@ -17,12 +17,16 @@ export async function generateEmailDraft(userPrompt: string, existingSubject?: s
     1. Generate a concise and professional subject line.
     2. Generate a well-structured and natural-sounding email body based on the content.
     
-    IMPORTANT: Respond ONLY with a valid JSON object in the following format:
+    IMPORTANT: 
+    - Respond ONLY with a valid JSON object.
+    - If the input contains masked data like <OTP_MASKED> or <PASSWORD_MASKED>, do NOT attempt to guess it. 
+    - Describe the intent (e.g., "The OTP is provided for your verification") without using the masked placeholder incorrectly.
+    
+    Format:
     {
       "subject": "...",
       "body": "..."
     }
-    Do not include any other text or markdown formatting.
   `;
 
     const { response: result, privacy } = await callGeminiSecurely(prompt);

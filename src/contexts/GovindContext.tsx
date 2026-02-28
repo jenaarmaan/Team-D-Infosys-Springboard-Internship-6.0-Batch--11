@@ -1139,7 +1139,14 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
             // "Quick Reply" or "AI Suggestion" - Skip prompt, go to confirmation
             setComposeStep("CONFIRM_DRAFT");
             const platformLabel = intent.platform === "telegram" ? "Telegram message" : "reply";
-            speak(`I've prepared your ${platformLabel} to ${to} saying: "${body}". Shall I send it now, or would you like to edit, add more, or discard it?`);
+
+            let privacyDisclaimer = "";
+            if (privacyInfo && privacyInfo.length > 0) {
+              const types = [...new Set(privacyInfo)].join(" and ");
+              privacyDisclaimer = ` I've also masked your ${types} for security.`;
+            }
+
+            speak(`I've prepared your ${platformLabel} to ${to} saying: "${body}".${privacyDisclaimer} Shall I send it now, or would you like to edit, add more, or discard it?`);
           } else {
             // Needs user input msg - Adapter already spoke the prompt
             setComposeStep("PROMPT");

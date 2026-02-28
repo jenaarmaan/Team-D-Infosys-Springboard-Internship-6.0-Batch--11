@@ -44,4 +44,4 @@ npm run dev
 ```
 
 ## 📄 License
-Internship Project - Batch 11 - Team D
+Distributed under the MIT License. See `LICENSE` for more information.

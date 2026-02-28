@@ -3,6 +3,7 @@
     "name": "team-d-infosys-springboard-internship",
     "private": true,
     "version": "1.0.0",
+    "license": "MIT",
     "type": "module",
     "scripts": {
         "dev": "vite",
