@@ -14,8 +14,6 @@ export type RegisterStep =
   | "CONFIRM_EMAIL"
   | "PASSWORD"
   | "CONFIRM_PASSWORD"
-  | "APP_PASSWORD"
-  | "CONFIRM_APP_PASSWORD"
   | "FACE"
   | "VOICE_PIN"
   | "CONFIRM_VOICE_PIN"

@@ -286,9 +286,11 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       token = await getValidAccessToken();
       localStorage.setItem("gmail_oauth_token", token);
     } catch (e: any) {
-      console.warn("[GMAIL] No valid token found:", e);
+      console.warn("[GMAIL] No valid token found, triggering OAuth redirect:", e);
       setError("AUTH_ERROR");
       setLoading(false);
+      // 🚀 AUTO-TRIGGER OAUTH ON FAILURE
+      startOAuth();
       return;
     }
 

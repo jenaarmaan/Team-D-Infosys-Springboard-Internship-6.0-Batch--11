@@ -22,6 +22,14 @@ import {
 import { useSettings } from '@/contexts/SettingsContext';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { updateGmailAppPassword } from '@/lib/firebase/users';
+import { auth } from '@/lib/firebase/firebase';
+import { toast } from 'sonner';
+import { useState } from 'react';
+import { Mail } from 'lucide-react';
+import { useGmail } from '@/contexts/GmailContext';
 
 const Settings = () => {
   const {
@@ -39,6 +47,33 @@ const Settings = () => {
     privacyMasking, setPrivacyMasking,
     experimentalFeatures, setExperimentalFeatures
   } = useSettings();
+  const { startOAuth, oauthConnected } = useGmail();
+  const [appPassword, setAppPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveAppPassword = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      toast.error("You must be logged in to save settings.");
+      return;
+    }
+
+    if (!appPassword || appPassword.length < 8) {
+      toast.error("Please enter a valid Google App Password.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await updateGmailAppPassword(user.uid, appPassword.replace(/\s/g, ""));
+      toast.success("Gmail App Password saved successfully!");
+      setAppPassword('');
+    } catch (err: any) {
+      toast.error("Failed to save App Password: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Layout>
@@ -211,6 +246,61 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Generate AI summaries for incoming notifications.</p>
                   </div>
                   <Switch checked={autoSummarize} onCheckedChange={setAutoSummarize} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email / Gmail Integration */}
+            <Card className="bg-card/30 backdrop-blur-sm border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-primary" />
+                  Gmail Integration
+                </CardTitle>
+                <CardDescription>Configure how Govind interacts with your Google account.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <p className="font-medium">OAuth Connectivity</p>
+                      <p className="text-sm text-muted-foreground">
+                        {oauthConnected ? "Connected via Google OAuth" : "Connect your account to enable Gmail features."}
+                      </p>
+                    </div>
+                    <Button
+                      variant={oauthConnected ? "outline" : "default"}
+                      onClick={startOAuth}
+                      className={cn(oauthConnected && "border-green-500/50 text-green-500 hover:text-green-600")}
+                    >
+                      {oauthConnected ? "Reconnect Account" : "Connect Google"}
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <Label htmlFor="app-password">Google App Password (Fallback)</Label>
+                    <div className="flex gap-3">
+                      <Input
+                        id="app-password"
+                        type="password"
+                        placeholder="Enter 16-character app password"
+                        value={appPassword}
+                        onChange={(e) => setAppPassword(e.target.value)}
+                        className="bg-background/50"
+                      />
+                      <Button
+                        onClick={handleSaveAppPassword}
+                        disabled={saving || !appPassword}
+                      >
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Used as a legacy fallback if OAuth fails. Generate this in your Google Account Security settings.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

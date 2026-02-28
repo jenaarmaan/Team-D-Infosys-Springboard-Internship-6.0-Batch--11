@@ -38,11 +38,8 @@ export const handleRegisterSpeech = (
         setStep("PASSWORD");
         speak("Great. Now, please say your password.");
       } else if (step === "CONFIRM_PASSWORD") {
-        setStep("APP_PASSWORD");
-        speak("Got it. Now please say your 16 character Google App Password for Gmail integration. This helps me send emails for you.");
-      } else if (step === "CONFIRM_APP_PASSWORD") {
         setStep("FACE");
-        speak("Understood. Now I need to capture your face for biometric identity. Please look at the camera and click Capture Face.");
+        speak("Got it. Now I need to capture your face for biometric identity. Please look at the camera and click Capture Face.");
       } else if (step === "CONFIRM_VOICE_PIN") {
         setStep("COMPLETE");
         speak("Finalizing your secure registration.");
@@ -57,9 +54,6 @@ export const handleRegisterSpeech = (
       } else if (step === "CONFIRM_PASSWORD") {
         setStep("PASSWORD");
         speak("No problem. Please say your password again.");
-      } else if (step === "CONFIRM_APP_PASSWORD") {
-        setStep("APP_PASSWORD");
-        speak("Understood. Please say your App Password again.");
       } else if (step === "CONFIRM_VOICE_PIN") {
         setStep("VOICE_PIN");
         speak("Please say your four digit voice PIN again.");
@@ -92,14 +86,7 @@ export const handleRegisterSpeech = (
       return;
     }
 
-    case "APP_PASSWORD": {
-      // App passwords usually have spaces, remove them for storage
-      const cleanAppPwd = text.replace(/\s/g, "");
-      setSession((prev) => ({ ...prev, appPassword: cleanAppPwd }));
-      setStep("CONFIRM_APP_PASSWORD");
-      speak(`App Password received. Is that correct?`);
-      return;
-    }
+
 
     case "VOICE_PIN": {
       const result = parseVoicePin(text);
