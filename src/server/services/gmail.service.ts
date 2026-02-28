@@ -1,6 +1,7 @@
 import { logger } from '../lib/logger';
 import nodemailer from 'nodemailer';
 import { getDb } from '../lib/clients/firebase.admin';
+import { ImapFlow } from 'imapflow';
 
 /**
  * Enterprise Gmail Service
@@ -81,7 +82,6 @@ class GmailService {
             const data = await response.json();
             const messages = data.messages || [];
 
-            // detailed fetches for all IDs found (limit to 15 to stay within Lambda limits)
             const listToFetch = messages.slice(0, 15);
             console.log(`📧 [GMAIL SERVICE] Fetching details for ${listToFetch.length} messages...`);
             const emails = await Promise.all(
@@ -89,7 +89,7 @@ class GmailService {
                     try {
                         const detailRes = await fetch(`${this.GMAIL_API_BASE}/messages/${msg.id}?format=metadata`, {
                             headers: this.getHeaders(token),
-                            signal: this.getTimeoutSignal(5000) // 5s for parallel metadata
+                            signal: this.getTimeoutSignal(5000)
                         });
                         if (!detailRes.ok) return null;
 
@@ -121,22 +121,58 @@ class GmailService {
             error.uid = uid;
             console.warn(`[GMAIL] OAuth fetching failed: ${error.message}. Checking for legacy fallback...`);
 
-            // 🛑 LEGACY FALLBACK ATTEMPT (FETCHING)
-            // IMAP is not natively supported in fetch-based environments without a thick library.
-            // We follow the user's request: access it, then throw error.
             if (error.uid) {
                 const creds = await this.getLegacyCredentials(error.uid);
                 if (creds?.appPassword) {
-                    throw new Error(`OAUTH_FAILED: Attempted legacy fallback with App Password for ${creds.email}, but IMAP fetching is not implemented. Please reconnect via OAuth.`);
+                    console.log(`🚀 [GMAIL] Attempting legacy IMAP fetch for ${creds.email}...`);
+                    try {
+                        return await this.listEmailsViaImap(creds.email, creds.appPassword, options);
+                    } catch (imapErr: any) {
+                        console.error("❌ [GMAIL IMAP FAILED] Legacy fallback failed:", imapErr.message);
+                        throw new Error(`GMAIL_FETCH_FAILURE: OAuth failed AND App Password IMAP failed (${imapErr.message})`);
+                    }
                 }
             }
 
             if (error.name === 'AbortError') {
-                console.error("🛑 [GMAIL] Request timed out (Network Latency too high in region)");
+                console.error("🛑 [GMAIL] Request timed out");
                 throw new Error("GMAIL_TIMEOUT");
             }
             logger.error('Gmail list failed', error);
             throw error;
+        }
+    }
+
+    private async listEmailsViaImap(email: string, appPassword: string, options: any) {
+        const client = new ImapFlow({
+            host: 'imap.gmail.com',
+            port: 993,
+            secure: true,
+            auth: { user: email, pass: appPassword },
+            logger: false
+        });
+
+        await client.connect();
+        const mailbox = await client.mailboxOpen('INBOX');
+        try {
+            const emails = [];
+            const startSeq = Math.max(1, mailbox.exists - (options.limit || 10) + 1);
+            const generator = client.fetch(`${startSeq}:*`, { envelope: true, bodyStructure: true, flags: true });
+            for await (const msg of generator) {
+                emails.push({
+                    id: msg.uid.toString(),
+                    threadId: (msg as any).threadId?.toString() || msg.uid.toString(),
+                    from: msg.envelope.from[0]?.name || msg.envelope.from[0]?.address || 'Unknown',
+                    subject: msg.envelope.subject || '(No Subject)',
+                    date: msg.envelope.date.toISOString(),
+                    snippet: '',
+                    isUnread: !msg.flags.has('\\Seen'),
+                    legacy: true
+                });
+            }
+            return emails.reverse();
+        } finally {
+            await client.logout();
         }
     }
 
@@ -168,17 +204,53 @@ class GmailService {
                 body: this.extractBody(payload)
             };
         } catch (error: any) {
-            // 🛑 LEGACY FALLBACK ATTEMPT (FETCHING)
             error.uid = uid;
             if (error.uid) {
                 const creds = await this.getLegacyCredentials(error.uid);
                 if (creds?.appPassword) {
-                    throw new Error(`OAUTH_FAILED: Cannot fetch email ${messageId} via App Password. Legacy protocol (IMAP) is restricted. Please fix OAuth.`);
+                    console.log(`🚀 [GMAIL] Attempting legacy IMAP single fetch for ${creds.email}...`);
+                    try {
+                        return await this.getEmailViaImap(creds.email, creds.appPassword, messageId);
+                    } catch (imapErr: any) {
+                        console.error("❌ [GMAIL IMAP GET FAILED] Legacy fallback failed:", imapErr.message);
+                        throw new Error(`GMAIL_GET_FAILURE: OAuth failed AND App Password IMAP failed (${imapErr.message})`);
+                    }
                 }
             }
             if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail get failed', error);
             throw error;
+        }
+    }
+
+    private async getEmailViaImap(email: string, appPassword: string, uid: string) {
+        const client = new ImapFlow({
+            host: 'imap.gmail.com',
+            port: 993,
+            secure: true,
+            auth: { user: email, pass: appPassword },
+            logger: false
+        });
+
+        await client.connect();
+        const lock = await client.getMailboxLock('INBOX');
+        try {
+            const msg = await client.fetchOne(uid, { envelope: true, source: true });
+            if (!msg) throw new Error("Email not found via IMAP");
+
+            return {
+                id: uid,
+                threadId: msg.threadId || uid,
+                from: msg.envelope.from[0]?.address || 'Unknown',
+                to: msg.envelope.to[0]?.address || '',
+                subject: msg.envelope.subject || '(No Subject)',
+                date: msg.envelope.date.toISOString(),
+                body: msg.source.toString(),
+                legacy: true
+            };
+        } finally {
+            lock.release();
+            await client.logout();
         }
     }
 
@@ -202,36 +274,26 @@ class GmailService {
                 method: 'POST',
                 headers: this.getHeaders(token),
                 body: JSON.stringify({ raw: encodedMessage }),
-                signal: this.getTimeoutSignal(10000) // 10s for send
+                signal: this.getTimeoutSignal(10000)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`❌ [GMAIL SEND HTTP ERROR] Status: ${response.status}, Body: ${errorText}`);
                 const err = new Error(`Gmail API Send Error: ${response.status} - ${errorText}`) as any;
                 err.uid = uid;
                 throw err;
             }
 
-            console.log(`✅ [GMAIL SEND SUCCESS] Status: ${response.status}`);
             return await response.json();
         } catch (error: any) {
             error.uid = uid;
-            console.warn(`[GMAIL] OAuth sending failed: ${error.message}. Attempting SMTP fallback...`);
-
-            // 🛑 LEGACY FALLBACK ATTEMPT (SENDING)
-            // SMTP is supported via nodemailer
             if (error.uid) {
                 const creds = await this.getLegacyCredentials(error.uid);
                 if (creds?.appPassword) {
-                    console.log(`🚀 [GMAIL] Attempting legacy SMTP send for ${creds.email}...`);
                     try {
                         const transporter = nodemailer.createTransport({
                             service: 'gmail',
-                            auth: {
-                                user: creds.email,
-                                pass: creds.appPassword
-                            }
+                            auth: { user: creds.email, pass: creds.appPassword }
                         });
 
                         const info = await transporter.sendMail({
@@ -241,15 +303,12 @@ class GmailService {
                             text: body
                         });
 
-                        console.log(`✅ [GMAIL SMTP SUCCESS] Message sent: ${info.messageId}`);
                         return { legacy: true, messageId: info.messageId };
                     } catch (smtpErr: any) {
-                        console.error("❌ [GMAIL SMTP FAILED] Legacy fallback failed:", smtpErr.message);
-                        throw new Error(`GMAIL_TOTAL_FAILURE: OAuth failed AND App Password SMTP failed (${smtpErr.message})`);
+                        throw new Error(`GMAIL_TOTAL_FAILURE: SMTP fallback failed (${smtpErr.message})`);
                     }
                 }
             }
-
             if (error.name === 'AbortError') throw new Error("GMAIL_TIMEOUT");
             logger.error('Gmail send failed', error);
             throw error;

@@ -68,7 +68,7 @@ const intentPatterns: { action: IntentAction; platform: TargetPlatform; keywords
   { action: "SUMMARIZE", platform: "gmail", keywords: ["summarize this email", "summarise this email", "summarize mail", "summarise mail"] },
 
   // Generic Fallbacks (Checked LAST)
-  { action: "READ", platform: "gmail", keywords: ["read my messages", "check my mail", "read my mail", "read the mail", "read first mail", "read my first mail", "read first email", "read my first email", "read the first email", "read my emails", "read my mails", "read mails", "read emails", "check my emails", "what do i have", "open it", "check mailbox"] },
+  { action: "READ", platform: "gmail", keywords: ["read", "open", "read my messages", "check my mail", "read mail", "read email", "open mail", "open email", "check my emails"] },
   { action: "SUMMARIZE", platform: "gmail", keywords: ["summarize", "summary", "digest", "what is it about", "summarise"] },
   { action: "REPLY", platform: "gmail", keywords: ["reply", "respond", "answer"] },
   { action: "SEND", platform: "gmail", keywords: ["send", "compose", "write an email"] },

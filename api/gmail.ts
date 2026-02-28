@@ -15,8 +15,13 @@ export default withMiddleware(async (req: AuthenticatedRequest, res: VercelRespo
         console.log(`📨 [GMAIL API] Action: ${action}, UID: ${uid}`);
 
         console.log(`🔑 [GMAIL API] Fetching token for UID: ${uid}`);
-        const accessToken = await tokenService.getValidToken(uid);
-        console.log(`✅ [GMAIL API] Token acquired.`);
+        let accessToken = "";
+        try {
+            accessToken = await tokenService.getValidToken(uid);
+            console.log(`✅ [GMAIL API] Token acquired.`);
+        } catch (tokenErr: any) {
+            console.warn(`⚠️ [GMAIL API] OAuth token not available: ${tokenErr.message}. Proceeding to service fallback.`);
+        }
 
         switch (action) {
             case 'list': {

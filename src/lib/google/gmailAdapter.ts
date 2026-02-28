@@ -26,6 +26,11 @@ export const GmailAdapter: PlatformAdapter = {
                         "eighth": 8, "8th": 8, "eight": 8,
                         "ninth": 9, "9th": 9, "nine": 9,
                         "tenth": 10, "10th": 10, "ten": 10,
+                        "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14, "fifteenth": 15,
+                        "sixteenth": 16, "seventeenth": 17, "eighteenth": 18, "nineteenth": 19, "twentieth": 20,
+                        "twenty first": 21, "twenty second": 22, "twenty third": 23, "twenty fourth": 24, "twenty fifth": 25,
+                        "twenty sixth": 26, "twenty seventh": 27, "twenty eighth": 28, "twenty ninth": 29, "thirtieth": 30,
+                        "thirty first": 31, "thirty second": 32, "thirty third": 33, "fortieth": 40, "fiftieth": 50,
                         "last": 1
                     };
 
@@ -33,12 +38,13 @@ export const GmailAdapter: PlatformAdapter = {
 
                     // Regex for "read email 3", "open 3rd", "read third mail"
                     const digitMatch = text.match(/(?:read|open).*(?:number|email)?\s*(\d+)/i);
-                    const wordMatch = text.match(/(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last)\s+(?:mail|email)?/i);
+                    const wordEntries = Object.keys(wordMap).sort((a, b) => b.length - a.length).join("|");
+                    const wordMatch = text.match(new RegExp(`\\b(${wordEntries})\\b`, "i"));
 
                     if (digitMatch) {
                         targetIndex = parseInt(digitMatch[1]);
                     } else if (wordMatch) {
-                        targetIndex = wordMap[wordMatch[1]];
+                        targetIndex = wordMap[wordMatch[1].toLowerCase()];
                     }
 
                     // 2. 🔍 FILTERING ("from google", "about jobs")
@@ -59,12 +65,7 @@ export const GmailAdapter: PlatformAdapter = {
                     }
 
                     // 3. 🎯 EXECUTE MATCH
-                    // If user asked for specific index (e.g. "read 3rd"), verify against ORIGINAL list if no filter, or FILTERED list?
-                    // User expectation: "Read my 3rd mail" -> 3rd in the main list.
-                    // "Read mail from Google" -> List Google mails.
-
                     if (targetIndex !== -1) {
-                        // User asked for specific index
                         if (emails.length < targetIndex) {
                             return { success: false, message: "I couldn't find that email." };
                         }
@@ -88,11 +89,9 @@ export const GmailAdapter: PlatformAdapter = {
                         };
                     }
 
-                    // If filters are active but no index, list matches
                     if (fromMatch || aboutMatch) {
                         if (emails.length === 0) return { success: true, message: "No emails found matching your search." };
                         if (emails.length === 1) {
-                            // Only one match? Read it immediately
                             const target = emails[0];
                             const full = await readEmail(target.id);
                             const summaryData = await summarizeEmail(full.body);
@@ -109,7 +108,6 @@ export const GmailAdapter: PlatformAdapter = {
                         return { success: true, message: `Found ${emails.length} emails. ${summary}. Say 'read the first one' to open.` };
                     }
 
-                    // Default: LIST SUMMARY (Top 5)
                     if (emails.length === 0) {
                         return { success: true, message: "Your inbox is empty.", data: [] };
                     }
@@ -142,11 +140,8 @@ export const GmailAdapter: PlatformAdapter = {
                 }
 
                 case "REPLY": {
-                    // Extract message: "reply saying [message]"
                     const match = text.match(/reply saying (.+)/i) || text.match(/reply (.+)/i);
                     const isDraftRequest = text.includes("draft");
-
-                    // Get target email (either from UI context or latest inbox)
                     const targetId = intent.entities?.messageId;
                     let full;
 
@@ -158,9 +153,6 @@ export const GmailAdapter: PlatformAdapter = {
                         full = await readEmail(emails[0].id);
                     }
 
-                    const latest = full; // For naming consistency below
-
-                    // If no message specified or explicitly asking to draft -> OPEN UI
                     if (!match || isDraftRequest) {
                         return {
                             success: true,
@@ -175,22 +167,15 @@ export const GmailAdapter: PlatformAdapter = {
                     }
 
                     const replyMessage = match[1];
-                    // Direct send (for now, or maybe default to draft if "confirm" is required?)
-                    // User asked for "Confirm before sending" in pipeline.
-                    // Let's bias to DRAFT even if message is present, or maybe just send?
-                    // "Reply saying..." usually implies intent to send. 
-                    // Let's stick to: "Reply saying X" -> Direct Send. "Draft reply" -> UI.
-
-                    await replyToEmail(latest.threadId, latest.from, latest.subject, replyMessage);
+                    await replyToEmail(full.threadId, full.from, full.subject, replyMessage);
 
                     return {
                         success: true,
-                        message: `Replied to ${latest.from} saying: ${replyMessage}`
+                        message: `Replied to ${full.from} saying: ${replyMessage}`
                     };
                 }
 
                 case "SEND": {
-                    // 1. "Compose a mail" or "Draft email" -> Open UI
                     if (text.includes("compose") || text.includes("draft") || text === "send email") {
                         return {
                             success: true,
@@ -199,12 +184,10 @@ export const GmailAdapter: PlatformAdapter = {
                         };
                     }
 
-                    // 2. "Send email to X saying Y" -> Direct send
                     const toMatch = text.match(/to\s+([a-zA-Z0-9@._-]+)/i);
                     const msgMatch = text.match(/saying\s+(.+)/i);
 
                     if (!toMatch || !msgMatch) {
-                        // Fallback to UI if parsing fails
                         return {
                             success: true,
                             message: "Opening compose window. Who do you want to email?",
@@ -241,4 +224,3 @@ export const GmailAdapter: PlatformAdapter = {
         }
     }
 };
-
