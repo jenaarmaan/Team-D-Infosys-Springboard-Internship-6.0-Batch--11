@@ -45,9 +45,11 @@ import {
   updateVoicePinHash,
   markFaceRegistered,
   getSecurityStateByEmail,
+  updateGmailAppPassword,
 } from "@/lib/firebase/users";
 import { getFaceImageUrl } from "@/lib/firebase/storage";
 import { detectSensitiveData } from "@/privacy/detector";
+import { auth } from "@/lib/firebase/firebase";
 import { sanitize } from "@/privacy/sanitizer";
 import { routeToPlatform } from "@/lib/platforms/platformRouter";
 import { getTelegramClient } from "@/lib/telegram/telegramClient";
@@ -1031,6 +1033,25 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // 🔴 0. GLOBAL COMMAND PREEMPTION (Safety First)
+    if (text.toLowerCase().includes("my app password is")) {
+      const parts = text.toLowerCase().split("is");
+      if (parts.length > 1) {
+        const rawPwd = parts[parts.length - 1].trim().replace(/\s/g, "");
+        if (rawPwd.length >= 8) {
+          const user = auth.currentUser;
+          if (user) {
+            updateGmailAppPassword(user.uid, rawPwd)
+              .then(() => {
+                speak("I've successfully updated your Gmail App Password. Let me try connecting again.");
+                gmail.fetchInboxViaOAuth();
+              })
+              .catch((err) => speak("I couldn't save that password. " + err.message));
+            return;
+          }
+        }
+      }
+    }
+
     if (
       handleGlobalCommand(
         text,

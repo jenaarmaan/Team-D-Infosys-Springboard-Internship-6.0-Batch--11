@@ -16,6 +16,8 @@ import { getValidAccessToken } from "@/lib/google/gmailClient";
 import { useSettings } from "@/contexts/SettingsContext";
 import { speakText } from "@/services/ttsService";
 import { apiClient } from "@/api/client";
+import { useNavigate } from "react-router-dom";
+import { getUserProfile } from "@/lib/firebase/users";
 
 interface GmailContextType {
   handleGmailVoiceCommand: (transcript: string) => Promise<void>;
@@ -64,6 +66,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GmailContext = createContext<GmailContextType | undefined>(undefined);
 
 export const GmailProvider = ({ children }: { children: ReactNode }) => {
+  const navigate = useNavigate();
   const [gmailConnected, setGmailConnected] = useState(false);
   const [inboxEmails, setInboxEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
@@ -286,10 +289,27 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       token = await getValidAccessToken();
       localStorage.setItem("gmail_oauth_token", token);
     } catch (e: any) {
-      console.warn("[GMAIL] No valid token found, triggering OAuth redirect:", e);
+      console.warn("[GMAIL] OAuth failed. Checking for App Password fallback...");
+
+      const user = auth.currentUser;
+      if (user) {
+        const profile = await getUserProfile(user.uid);
+        const hasAppPassword = profile?.security?.gmailAppPassword;
+
+        if (!hasAppPassword) {
+          console.warn("[GMAIL] No OAuth token and no App Password found. Prompting user.");
+          setError("GMAIL_AUTH_CRITICAL");
+          setLoading(false);
+
+          navigate("/settings");
+          speakText("I'm having trouble connecting to your Gmail. Please add a Google App Password in your settings, or say it to me now.");
+          return;
+        }
+      }
+
       setError("AUTH_ERROR");
       setLoading(false);
-      // 🚀 AUTO-TRIGGER OAUTH ON FAILURE
+      // 🚀 AUTO-TRIGGER OAUTH ON FAILURE AS BACKUP
       startOAuth();
       return;
     }
