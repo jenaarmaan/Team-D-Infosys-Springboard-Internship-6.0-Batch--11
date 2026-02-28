@@ -2,7 +2,7 @@ import { PlatformAdapter, ExecutionResult } from "@/lib/platforms/platformTypes"
 import { ResolvedIntent } from "@/lib/govind/intentMap";
 import { fetchInbox, readEmail } from "./gmailReader";
 import { sendEmail, replyToEmail } from "./gmailSender";
-import { summarizeEmail } from "@/services/gmailSummarizer";
+import { summarizeEmail, humanizeEmail } from "@/services/gmailSummarizer";
 
 export const GmailAdapter: PlatformAdapter = {
     id: "gmail",
@@ -73,19 +73,26 @@ export const GmailAdapter: PlatformAdapter = {
                         const target = emails[targetIndex - 1]; // 1-based to 0-based
                         const full = await readEmail(target.id);
 
-                        // Auto-Summarize
-                        let spokenContent = full.body.slice(0, 150) + "...";
+                        // Humanize Content
+                        let readableContent = full.body;
                         try {
-                            const summaryData = await summarizeEmail(full.body);
-                            spokenContent = summaryData.summary;
+                            const humanData = await humanizeEmail(full.body, full.subject, full.from, full.images);
+                            readableContent = humanData.content;
                         } catch (e) {
-                            console.warn("Auto-summary failed");
+
+                            console.warn("Humanization failed, falling back to summary...");
+                            try {
+                                const summaryData = await summarizeEmail(full.body);
+                                readableContent = summaryData.summary;
+                            } catch (se) {
+                                console.warn("Auto-summary also failed");
+                            }
                         }
 
                         return {
                             success: true,
-                            message: `Email ${targetIndex} from ${full.from}. Subject: ${full.subject}. Here is the summary: ${spokenContent}. Say 'reply' to respond.`,
-                            data: { ...full, summary: spokenContent, type: "OPEN_EMAIL_ID" }
+                            message: `${readableContent}. Say 'reply' to respond.`,
+                            data: { ...full, body: readableContent, type: "OPEN_EMAIL_ID" }
                         };
                     }
 

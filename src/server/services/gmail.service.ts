@@ -194,6 +194,8 @@ class GmailService {
             const headers = payload?.headers || [];
             const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
+            const content = this.extractContent(payload);
+
             return {
                 id: messageId,
                 threadId: data.threadId,
@@ -201,7 +203,8 @@ class GmailService {
                 to: getHeader('To'),
                 subject: getHeader('Subject'),
                 date: getHeader('Date'),
-                body: this.extractBody(payload)
+                body: content.text || data.snippet || '',
+                images: content.images || []
             };
         } catch (error: any) {
             error.uid = uid;
@@ -246,6 +249,7 @@ class GmailService {
                 subject: msg.envelope.subject || '(No Subject)',
                 date: msg.envelope.date.toISOString(),
                 body: msg.source.toString(),
+                images: [],
                 legacy: true
             };
         } finally {
@@ -386,20 +390,37 @@ class GmailService {
         }
     }
 
-    private extractBody(payload: any): string {
-        if (!payload) return '';
-        if (payload.mimeType === 'text/plain' && payload.body?.data) {
-            return Buffer.from(payload.body.data, 'base64').toString('utf-8');
-        }
-        if (payload.parts) {
-            for (const part of payload.parts) {
-                if (part.mimeType === 'text/plain' && part.body?.data) {
-                    return Buffer.from(part.body.data, 'base64').toString('utf-8');
+    private extractContent(payload: any, result: { text: string; images: string[] } = { text: '', images: [] }): { text: string; images: string[] } {
+        if (!payload) return result;
+
+        // 1. Extract Text content (favor HTML if available for better AI context)
+        if (payload.body?.data) {
+            if (payload.mimeType === 'text/plain' || payload.mimeType === 'text/html') {
+                const decoded = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+                // If we get both, HTML is usually more descriptive for the AI
+                if (payload.mimeType === 'text/html') {
+                    result.text = decoded; // Favor HTML
+                } else if (!result.text) {
+                    result.text = decoded; // Fallback to plain
                 }
             }
         }
-        return '';
+
+        // 2. Extract Inline Images (base64)
+        if (payload.mimeType?.startsWith('image/') && payload.body?.data) {
+            result.images.push(payload.body.data);
+        }
+
+        // 3. Recurse through parts
+        if (payload.parts) {
+            for (const part of payload.parts) {
+                this.extractContent(part, result);
+            }
+        }
+
+        return result;
     }
 }
+
 
 export const gmailService = new GmailService();

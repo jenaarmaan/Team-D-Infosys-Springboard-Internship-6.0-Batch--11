@@ -163,19 +163,25 @@ export async function readEmail(messageId: string) {
     const headers = payload?.headers || [];
     const getHeader = (name: string) => headers.find((h: any) => h.name === name)?.value || '';
 
-    const extractBody = (p: any): string => {
-      if (!p) return '';
-      if (p.mimeType === 'text/plain' && p.body?.data) {
-        return atob(p.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-      }
-      if (p.parts) {
-        for (const part of p.parts) {
-          const body = extractBody(part);
-          if (body) return body;
+    const extractContent = (p: any, res = { text: '', images: [] as string[] }): { text: string; images: string[] } => {
+      if (!p) return res;
+      if (p.body?.data) {
+        if (p.mimeType === 'text/plain' || p.mimeType === 'text/html') {
+          const decoded = atob(p.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+          if (p.mimeType === 'text/html') res.text = decoded;
+          else if (!res.text) res.text = decoded;
         }
       }
-      return '';
+      if (p.mimeType?.startsWith('image/') && p.body?.data) {
+        res.images.push(p.body.data);
+      }
+      if (p.parts) {
+        for (const part of p.parts) extractContent(part, res);
+      }
+      return res;
     };
+
+    const content = extractContent(payload);
 
     return {
       id: messageId,
@@ -184,8 +190,10 @@ export async function readEmail(messageId: string) {
       to: getHeader('To'),
       subject: getHeader('Subject'),
       date: new Date(getHeader('Date')),
-      body: extractBody(payload)
+      body: content.text || data.snippet || '',
+      images: content.images
     };
+
   } catch (fallbackErr) {
     console.error("[GMAIL][GET] Fallback failed:", fallbackErr);
     throw fallbackErr;

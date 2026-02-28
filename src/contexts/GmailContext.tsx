@@ -9,7 +9,7 @@ import { auth } from "@/lib/firebase/firebase";
 
 import { fetchInbox, readEmail, markEmailAsRead } from "@/lib/google/gmailReader";
 import { sendEmail, replyToEmail } from "@/lib/google/gmailSender";
-import { summarizeEmail } from "@/services/gmailSummarizer";
+import { summarizeEmail, humanizeEmail } from "@/services/gmailSummarizer";
 import { generateReplyDraft } from "@/services/gmailReplyGenerator";
 import { getValidAccessToken } from "@/lib/google/gmailClient";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -246,8 +246,20 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
       const result = await apiClient.get<any>(`/api/v1/gmail?action=get&id=${id}`, token ? { googleToken: token } : {});
 
       if (result.success && result.data?.messages?.[0]) {
-        setSelectedEmail(result.data.messages[0]);
+        const email = result.data.messages[0];
         setReplyDraft(null);
+
+        // 🔥 HUMANIZATION LAYER (Converts raw embeddings/junk to human narrative)
+        try {
+          const humanData = await humanizeEmail(email.body, email.subject, email.from, email.images);
+          setSelectedEmail({
+            ...email,
+            body: humanData.content
+          });
+        } catch (hErr) {
+          console.warn("[GMAIL CONTEXT] Humanization failed, showing raw content.");
+          setSelectedEmail(email);
+        }
       } else {
         throw new Error(result.error?.message || "Failed to read email");
       }

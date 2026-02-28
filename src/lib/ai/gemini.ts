@@ -11,7 +11,7 @@ import { apiClient } from "@/api/client";
  * Low-level function to call Gemini.
  * Enforces a hard boundary: Throws if raw sensitive data is detected.
  */
-export async function callGemini(prompt: string): Promise<string> {
+export async function callGemini(prompt: string, images?: string[]): Promise<string> {
     // Hard Boundary Check: Ensure no raw sensitive data is being sent
     const sensitiveEntities = detectSensitiveData(prompt);
     if (sensitiveEntities.length > 0) {
@@ -21,7 +21,7 @@ export async function callGemini(prompt: string): Promise<string> {
 
     try {
         console.log("[AI] Attempting backend Gemini call via /api/v1/ai...");
-        const result = await apiClient.post<{ response: string }>("/api/v1/ai", { prompt });
+        const result = await apiClient.post<{ response: string }>("/api/v1/ai", { prompt, images });
 
         if (result.success) {
             console.log("[AI] Backend call successful.");
@@ -103,7 +103,7 @@ export async function callGemini(prompt: string): Promise<string> {
  * Recommended way to call Gemini.
  * Automatically handles detection and sanitization.
  */
-export async function callGeminiSecurely(rawPrompt: string): Promise<{ response: string; privacy: SanitizedResult }> {
+export async function callGeminiSecurely(rawPrompt: string, images?: string[]): Promise<{ response: string; privacy: SanitizedResult }> {
     const spans = detectSensitiveData(rawPrompt);
     const sanitized = sanitize(rawPrompt, spans);
 
@@ -119,7 +119,7 @@ export async function callGeminiSecurely(rawPrompt: string): Promise<{ response:
     }
 
     console.log("[PRIVACY] Calling Gemini with sanitized prompt.");
-    const response = await callGemini(sanitized.sanitizedText);
+    const response = await callGemini(sanitized.sanitizedText, images);
 
     return {
         response,

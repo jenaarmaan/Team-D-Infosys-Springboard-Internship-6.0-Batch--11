@@ -21,17 +21,30 @@ if (!admin.apps.length) {
     }
 }
 
-async function generateContent(apiKey: string, model: string, version: string, prompt: string): Promise<string> {
+async function generateContent(apiKey: string, model: string, version: string, prompt: string, images?: string[]): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${apiKey}`;
 
-    console.log(`[AI] Fetching via REST (${version}): ${model}`);
+    console.log(`[AI] Fetching via REST (${version}): ${model}${images?.length ? ` with ${images.length} images` : ''}`);
+
+    const parts: any[] = [{ text: "You are Govind, an expert email reader and conversational assistant. Use the following context and images if provided.\n\n" + prompt }];
+
+    if (images && images.length > 0) {
+        images.slice(0, 5).forEach((data) => {
+            parts.push({
+                inlineData: {
+                    mimeType: "image/png",
+                    data: data
+                }
+            });
+        });
+    }
 
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: "You are Govind, a concise voice assistant. Optimize for TTS.\n\nUser: " + prompt }] }],
-            generationConfig: { maxOutputTokens: 800 }
+            contents: [{ parts }],
+            generationConfig: { maxOutputTokens: 1200 }
         })
     });
 
@@ -86,8 +99,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await admin.auth().verifyIdToken(token);
 
         // 3. Parse Body
-        const { prompt } = req.body || {};
+        const { prompt, images } = req.body || {};
         const safePrompt = typeof req.body === 'string' ? JSON.parse(req.body).prompt : prompt;
+        const safeImages = typeof req.body === 'string' ? JSON.parse(req.body).images : images;
 
         if (!safePrompt) return res.status(400).json({ error: 'Prompt required' });
 
@@ -150,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const config of modelMatrix) {
             try {
                 console.log(`[AI] Trying model: ${config.id} (${config.version})`);
-                const text = await generateContent(apiKey, config.id, config.version, safePrompt);
+                const text = await generateContent(apiKey, config.id, config.version, safePrompt, safeImages);
                 console.log(`[AI] Success with ${config.id} (${config.version})`);
 
                 successResponse = {
