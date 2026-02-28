@@ -28,9 +28,10 @@ const finalizeTTS = (resolve: () => void) => {
   isSpeaking = false;
   document.body.dataset.ttsActive = "false";
 
+  // 🕒 USER FIX: 1 second pause before listening starts
   setTimeout(() => {
     resumeListening("TTS");
-  }, 2000);
+  }, 1000);
 
   resolve();
 };
@@ -38,17 +39,19 @@ const finalizeTTS = (resolve: () => void) => {
  * HARD INTERRUPT — stop speech immediately
  * Used when user speaks during TTS
  */
-export const interruptTTS = () => {
+export const interruptTTS = (shouldResume = true) => {
   if (!isSpeaking) return;
 
-  console.log("[TTS] Interrupted by user speech");
+  console.log("[TTS] Interrupted. Should Resume Mic:", shouldResume);
   window.speechSynthesis.cancel();
   isSpeaking = false;
   document.body.dataset.ttsActive = "false";
 
-  setTimeout(() => {
-    resumeListening("TTS");
-  }, 100);
+  if (shouldResume) {
+    setTimeout(() => {
+      resumeListening("TTS");
+    }, 100);
+  }
 };
 
 
@@ -75,7 +78,7 @@ export const speakText = (text: string, options?: { cancelPrevious?: boolean, vo
     if (isSpeaking) {
       if (options?.cancelPrevious) {
         console.log("[TTS] Cancelling previous speech to prioritize new request.");
-        interruptTTS();
+        interruptTTS(false); // 🔒 IMPORTANT: Do not resume mic yet, we are about to speak again
         // Fall through to start new speech
       } else {
         console.warn("[TTS] Already speaking — skipping");

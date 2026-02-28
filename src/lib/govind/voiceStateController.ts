@@ -86,10 +86,11 @@ const safeStart = (source: string) => {
   }
 
   // If we just had an 'aborted' error, wait significantly longer
+  // 🛑 EXCEPTION: Skip backoff if the abort was planned (e.g. TTS)
   if (lastErrorType === 'aborted' && now - lastErrorTime < 4000) {
     console.log(`[VOICE] ${source} — backing off (abort cooling)`);
     if (currentRestartTimer) clearTimeout(currentRestartTimer);
-    currentRestartTimer = setTimeout(() => safeStart(`${source}-retry`), 2500);
+    currentRestartTimer = setTimeout(() => safeStart(`${source}-retry`), 2000);
     return;
   }
 
@@ -179,14 +180,16 @@ export const initVoiceRecognition = (rec: any) => {
 
   recognition.onerror = (event: any) => {
     isStarting = false;
-    lastErrorType = event.error;
-    lastErrorTime = Date.now();
     const isPlannedAbort = event.error === 'aborted' && (micState === "PAUSED_BY_REASON" || pauseReasons.size > 0);
 
     if (!isPlannedAbort) {
+      lastErrorType = event.error;
+      lastErrorTime = Date.now();
       errorBackoffCount++;
     } else {
-      console.log("[VOICE] Planned abort — ignoring error backoff");
+      console.log("[VOICE] Planned abort — skipping penalty backoff");
+      lastErrorType = "SUCCESS_PAUSE"; // Explicitly NOT 'aborted'
+      lastErrorTime = Date.now();
     }
 
     // 💣 RE-INITIALIZATION TRIGGER
