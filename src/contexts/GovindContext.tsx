@@ -12,7 +12,7 @@ import React, {
 import { detectIntent, TargetPlatform } from "@/lib/govind/intentMap";
 import { useGmail } from "@/contexts/GmailContext";
 import { useTelegram } from "@/contexts/TelegramContext";
-import { onAuthChange } from "@/lib/firebase/auth";
+import { onAuthChange, logoutUser } from "@/lib/firebase/auth";
 import { speakText, interruptTTS, warmUpTTS } from "@/services/ttsService";
 import { useSettings } from "@/contexts/SettingsContext";
 import type { GovindState } from "@/lib/govind/stateMachine";
@@ -114,6 +114,7 @@ interface GovindContextType {
   faceImageUrl: string | null;
   sleep: () => void;
   clearMessages: () => void;
+  performLogout: () => Promise<void>;
 }
 
 
@@ -245,7 +246,6 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
   // ✅ System Reset (Global State Recovery)
   const resetSystem = () => {
     console.log("[SYSTEM] Resetting all states");
-    destroySession();
     if (!settings.continuousListening) {
       stopListening();
     } else {
@@ -259,6 +259,27 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     setState("DORMANT");
     setIsAssistantOpen(false);
     isAwakeRef.current = false;
+  };
+
+  const performLogout = async () => {
+    console.log("[SYSTEM] Initializing hard logout...");
+    try {
+      await logoutUser();
+      destroySession();
+      setIsAuthenticated(false);
+      setUserName(null);
+      setFaceImageUrl(null);
+      userRef.current = null;
+      resetSystem();
+      setRouteIntent("/");
+      console.log("[SYSTEM] Logout successful");
+    } catch (err) {
+      console.error("[SYSTEM] Logout error:", err);
+      // Fallback
+      destroySession();
+      setIsAuthenticated(false);
+      resetSystem();
+    }
   };
 
   const sleep = () => resetSystem();
@@ -1041,7 +1062,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     // 🔐 4. Auth & System Intents
     if (intent.action === "LOGOUT") {
       speak("Logging you out.", { cancelPrevious: true });
-      resetSystem();
+      performLogout();
       return;
     }
 
@@ -1296,6 +1317,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
         faceImageUrl,
         sleep,
         clearMessages,
+        performLogout,
       }}
     >
 

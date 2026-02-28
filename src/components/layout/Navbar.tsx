@@ -11,23 +11,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export const Navbar = () => {
-  const { state, isAuthenticated, userName, wakeUp, sleep, setIsAuthenticated, clearMessages, addMessage, speak } = useGovind();
+  const { state, isAuthenticated, userName, wakeUp, sleep, setIsAuthenticated, clearMessages, addMessage, speak, performLogout } = useGovind();
   const navigate = useNavigate();
 
   const handleMicToggle = () => {
-    if (state === 'dormant') {
+    if (state === 'DORMANT') {
       wakeUp();
     } else {
       sleep();
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     speak("Goodbye! See you soon.");
-    setTimeout(() => {
-      setIsAuthenticated(false);
+    setTimeout(async () => {
+      await performLogout();
       clearMessages();
-      navigate('/');
       addMessage('system', 'Say "Hey Govind" to wake me up');
     }, 1500);
   };
@@ -47,17 +46,16 @@ export const Navbar = () => {
 
         {/* Center: Status */}
         <div className="flex items-center gap-2">
-          <div 
-            className={`w-2 h-2 rounded-full transition-colors ${
-              state === 'dormant' ? 'bg-govind-dormant' :
-              state === 'listening' || state === 'awake' ? 'bg-govind-listening animate-pulse' :
-              state === 'processing' ? 'bg-govind-processing animate-pulse' :
-              state === 'responding' ? 'bg-govind-speaking animate-pulse' :
-              'bg-primary'
-            }`}
+          <div
+            className={`w-2 h-2 rounded-full transition-colors ${state === 'DORMANT' ? 'bg-govind-dormant' :
+              state === 'LISTENING' || state === 'AWAKE' ? 'bg-govind-listening animate-pulse' :
+                state === 'PROCESSING' ? 'bg-govind-processing animate-pulse' :
+                  state === 'RESPONDING' ? 'bg-govind-speaking animate-pulse' :
+                    'bg-primary'
+              }`}
           />
           <span className="text-sm text-muted-foreground capitalize hidden sm:inline">
-            {state === 'dormant' ? 'Waiting for wake word' : state.replace('_', ' ')}
+            {state === 'DORMANT' ? 'Waiting for wake word' : state.replace('_', ' ')}
           </span>
         </div>
 
@@ -68,14 +66,14 @@ export const Navbar = () => {
             variant="ghost"
             size="icon"
             onClick={handleMicToggle}
-            className={`relative ${state !== 'dormant' ? 'text-govind-listening' : 'text-muted-foreground'}`}
+            className={`relative ${state !== 'DORMANT' ? 'text-govind-listening' : 'text-muted-foreground'}`}
           >
-            {state !== 'dormant' ? (
+            {state !== 'DORMANT' ? (
               <Mic className="w-5 h-5" />
             ) : (
               <MicOff className="w-5 h-5" />
             )}
-            {state !== 'dormant' && (
+            {state !== 'DORMANT' && (
               <span className="absolute inset-0 rounded-md border-2 border-govind-listening animate-pulse-ring" />
             )}
           </Button>
