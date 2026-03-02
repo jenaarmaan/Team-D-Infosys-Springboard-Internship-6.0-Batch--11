@@ -107,7 +107,7 @@ const gmailService = {
             const data = await res.json();
             const messages = data.messages || [];
 
-            return await Promise.all(messages.slice(0, 15).map(async (msg: any) => {
+            return await Promise.all(messages.slice(0, 50).map(async (msg: any) => {
                 if (!msg?.id) return null;
                 try {
                     const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, { headers: this.getHeaders(token) });
@@ -154,25 +154,32 @@ const gmailService = {
         if (query.includes("-in:trash -in:spam")) path = "[Gmail]/All Mail";
 
         await client.connect();
-        const mailbox = await client.mailboxOpen(path);
         try {
-            const emails = [];
-            const count = Math.min(mailbox.exists, options.limit || 20);
-            const startSeq = Math.max(1, mailbox.exists - count + 1);
+            const mailbox = await client.mailboxOpen(path);
+            const total = mailbox.exists || 0;
+            const start = Math.max(1, total - 49); // Fetch 50 most recent
+            const messages = await client.fetch(`${start}:${total}`, {
+                envelope: true,
+                flags: true, // Include flags to check for \Seen
+                source: true, // To get snippet
+                uid: true
+            });
 
-            for await (const msg of client.fetch(`${startSeq}:*`, { envelope: true, flags: true })) {
+            const list = [];
+            for await (const msg of messages) {
                 if (!msg || !msg.envelope) continue;
-                emails.push({
+                list.push({
                     id: msg.uid?.toString() || Math.random().toString(),
-                    threadId: (msg as any).threadId?.toString() || msg.uid?.toString() || "unknown",
-                    from: msg.envelope.from?.[0]?.address || 'Unknown',
-                    subject: msg.envelope.subject || '(No Subject)',
+                    threadId: msg.uid?.toString() || "unknown", // IMAP doesn't have threadId directly, use UID
+                    from: msg.envelope.from?.[0]?.address || "Unknown",
+                    subject: msg.envelope.subject || "(No Subject)",
                     date: msg.envelope.date ? msg.envelope.date.toISOString() : new Date().toISOString(),
+                    snippet: msg.source?.toString()?.substring(0, 100) || "", // Raw source snippet
                     isUnread: msg.flags ? !msg.flags.has('\\Seen') : true,
                     legacy: true
                 });
             }
-            return emails.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return list.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
         } finally { await client.logout(); }
     },
 
@@ -294,7 +301,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (token) {
                     const statusRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX`, { headers: gmailService.getHeaders(token) });
                     const statusData = await statusRes.json();
-                    return res.status(200).json({ success: true, data: { unreadCount: statusData.threadsUnread || 0 } });
+                    // Explicitly use threadsUnread to show ONLY the count of unread conversations
+                    const unreadCount = statusData.threadsUnread || 0;
+                    return res.status(200).json({ success: true, data: { unreadCount } });
                 }
                 // Fallback unread count via IMAP
                 try {

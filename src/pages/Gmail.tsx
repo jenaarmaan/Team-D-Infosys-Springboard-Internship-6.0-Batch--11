@@ -65,9 +65,9 @@ const Gmail = () => {
     setComposeData,
 
     currentSection,
-    changeSection
-
-
+    changeSection,
+    unreadCount,
+    fetchUnreadCount
   } = useGmail();
 
   /* ======================================================
@@ -75,7 +75,7 @@ const Gmail = () => {
      ====================================================== */
 
   const emails = inboxEmails || [];
-  const unreadCount = emails.length;
+  const displayUnreadCount = currentSection === 'inbox' ? unreadCount : 0;
 
   /* ======================================================
      🎤 VOICE: READ UNREAD COUNT

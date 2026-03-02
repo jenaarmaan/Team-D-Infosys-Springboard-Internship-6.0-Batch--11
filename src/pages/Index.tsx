@@ -264,7 +264,7 @@ const Index = () => {
               <span className="font-display font-semibold">Govind</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 Govind. All rights reserved.
+              © 2026 Govind. All rights reserved.
             </p>
           </div>
         </footer>
