@@ -105,7 +105,7 @@ export const Navbar = () => {
                 <DropdownMenuItem onClick={() => navigate('/gmail')} className="flex justify-between items-center py-3 cursor-pointer">
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-primary" />
-                    <span>Gmail Emails</span>
+                    <span>Unread Emails</span>
                   </div>
                   <Badge variant="secondary" className="bg-primary/20 text-primary">{gmailUnread}</Badge>
                 </DropdownMenuItem>
@@ -115,7 +115,7 @@ export const Navbar = () => {
                 <DropdownMenuItem onClick={() => navigate('/telegram')} className="flex justify-between items-center py-3 cursor-pointer">
                   <div className="flex items-center gap-2">
                     <Send className="w-4 h-4 text-primary" />
-                    <span>Telegram Messages</span>
+                    <span>Unread Messages</span>
                   </div>
                   <Badge variant="secondary" className="bg-primary/20 text-primary">{telegramUnread}</Badge>
                 </DropdownMenuItem>

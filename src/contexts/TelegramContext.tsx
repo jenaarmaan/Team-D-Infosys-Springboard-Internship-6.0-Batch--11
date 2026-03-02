@@ -203,6 +203,9 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
         setActiveChatId(id);
         setIsPopupOpen(!!id);
         client.selectChat(id);
+        if (id) {
+            setUnreadChats(prev => prev.map(c => c.id === id ? { ...c, unreadCount: 0 } : c));
+        }
     }, [client]);
 
     return (

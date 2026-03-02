@@ -293,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (token) {
                     const statusRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX`, { headers: gmailService.getHeaders(token) });
                     const statusData = await statusRes.json();
-                    return res.status(200).json({ success: true, data: { unreadCount: statusData.messagesUnread || 0 } });
+                    return res.status(200).json({ success: true, data: { unreadCount: statusData.threadsUnread || 0 } });
                 }
                 // Fallback unread count via IMAP
                 try {

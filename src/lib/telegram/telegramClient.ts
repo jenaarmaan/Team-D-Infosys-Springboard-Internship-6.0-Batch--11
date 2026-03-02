@@ -106,8 +106,17 @@ export class TelegramClient {
     return this.isConnected;
   }
 
+  clearUnreadCount(chatId: number): void {
+    const existing = this.internalChats.get(chatId);
+    if (existing) {
+      this.internalChats.set(chatId, { ...existing, unreadCount: 0 });
+      console.log(`🧹 [TG CLIENT] Unread count cleared for chat ${chatId}`);
+    }
+  }
+
   selectChat(chatId: number | null): void {
     this.activeChatId = chatId;
+    if (chatId !== null) this.clearUnreadCount(chatId);
     console.log(`🎯 [TG CLIENT] Active chat set to: ${chatId}`);
   }
 

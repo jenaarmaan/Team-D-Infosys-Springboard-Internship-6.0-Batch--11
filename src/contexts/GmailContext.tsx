@@ -212,6 +212,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         })));
         setLoading(false);
         sessionStorage.removeItem("gmail_oauth_retry_count");
+        fetchUnreadCount(); // 🔄 Refresh unread count immediately
         return;
       }
 
@@ -251,6 +252,7 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
           })));
           setLoading(false);
           sessionStorage.removeItem("gmail_oauth_retry_count");
+          fetchUnreadCount(); // 🔄 Refresh count even in fallback
           speakText("I'm using your App Password to fetch emails since the main connection is unavailable.");
           return;
         }
@@ -307,6 +309,14 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         } catch (hErr) {
           console.warn("[GMAIL CONTEXT] Humanization failed, showing raw content.");
           setSelectedEmail(email);
+        }
+
+        // 🔄 Mark as read and update badge
+        try {
+          await apiClient.post(`/api/v1/gmail?action=mark-read`, { messageId: id }, token ? { googleToken: token } : {});
+          fetchUnreadCount();
+        } catch (mErr) {
+          console.warn("[GMAIL CONTEXT] Failed to mark as read:", mErr);
         }
       } else {
         throw new Error(result.error?.message || "Failed to read email");
