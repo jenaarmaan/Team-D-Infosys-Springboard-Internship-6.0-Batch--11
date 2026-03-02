@@ -241,6 +241,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Clear retry count on fresh mount to allow plan A to work
+    sessionStorage.removeItem("gmail_oauth_retry_count");
     handleOAuthCallback();
   }, []);
 

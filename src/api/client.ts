@@ -18,6 +18,24 @@ export interface ApiRequestOptions extends RequestInit {
 class ApiClient {
     private baseUrl = ""; // Relative to deployment, e.g., /api/v1
 
+    private async getCurrentUser(): Promise<any> {
+        if (auth.currentUser) return auth.currentUser;
+
+        return new Promise((resolve) => {
+            // Wait up to 2 seconds for auth to initialize
+            const timeout = setTimeout(() => {
+                unsubscribe();
+                resolve(null);
+            }, 2000);
+
+            const unsubscribe = auth.onAuthStateChanged((user) => {
+                clearTimeout(timeout);
+                unsubscribe();
+                resolve(user);
+            });
+        });
+    }
+
     /**
      * Inject headers and handle request
      */
@@ -29,16 +47,19 @@ class ApiClient {
         const requestId = crypto.randomUUID();
         const headers = new Headers(options.headers);
 
-        // 1. Inject ID Token
-        const user = auth.currentUser;
+        // 1. Resolve Auth User (Wait for init if needed)
+        const user = await this.getCurrentUser();
         if (user) {
             const token = await user.getIdToken();
             headers.set("Authorization", `Bearer ${token}`);
+            console.log(`[API][${requestId}] Auth detected: ${user.email}`);
+        } else {
+            console.warn(`[API][${requestId}] No user detected for endpoint: ${endpoint}`);
         }
 
-        // 2. Inject Google Token if provided
+        // 2. Inject Google Token if provided (Fix header name)
         if (options.googleToken) {
-            headers.set("x-google-token", options.googleToken);
+            headers.set("google-token", options.googleToken);
         }
 
         // 3. Inject Request ID
@@ -51,11 +72,12 @@ class ApiClient {
                 headers,
             });
 
-            // 3. Handle Token Refresh (401)
+            // 4. Handle Token Refresh (401)
             if (response.status === 401 && retryCount < 1) {
                 console.warn("[API] 401 Unauthorized. Refreshing token and retrying...");
-                if (user) {
-                    await user.getIdToken(true); // Force refresh
+                const activeUser = await this.getCurrentUser();
+                if (activeUser) {
+                    await activeUser.getIdToken(true); // Force refresh
                     return this.request<T>(endpoint, options, retryCount + 1);
                 }
             }

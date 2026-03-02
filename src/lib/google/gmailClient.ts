@@ -58,10 +58,24 @@ function loadGapiScript(): Promise<void> {
  * Get a valid Gmail access token (reuse or refresh)
  */
 export async function getValidAccessToken(): Promise<string> {
+  const now = Date.now();
+
+  // Helper to wait for auth state before failing
+  const getCurrentUser = async (): Promise<any> => {
+    if (auth.currentUser) return auth.currentUser;
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => { unsubscribe(); resolve(null); }, 2000);
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        clearTimeout(timeout);
+        unsubscribe();
+        resolve(user);
+      });
+    });
+  };
+
   // 1. Try LocalStorage (Fastest & Direct from UI flow)
   const localToken = localStorage.getItem("gmail_oauth_token");
   const localExpiresAt = localStorage.getItem("gmail_oauth_expires_at");
-  const now = Date.now();
 
   if (localToken && localExpiresAt) {
     const expiresAt = parseInt(localExpiresAt);
@@ -77,11 +91,14 @@ export async function getValidAccessToken(): Promise<string> {
     console.warn("[GMAIL] Local token found without expiry metadata.");
     return localToken;
   }
-  if (!auth.currentUser) {
+
+  const user = await getCurrentUser();
+  if (!user) {
+    console.warn("[GMAIL] Auth check failed - user not found after wait.");
     throw new Error("User not authenticated");
   }
 
-  const uid = auth.currentUser.uid;
+  const uid = user.uid;
   const tokenRef = doc(db, "gmail_tokens", uid);
   console.log("Firestore path UID:", uid);
   const snap = await getDoc(tokenRef);
