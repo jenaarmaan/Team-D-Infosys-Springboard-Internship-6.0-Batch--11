@@ -15,14 +15,14 @@ async function getFirebaseAdmin() {
         if (saKeyEnv) {
             let rawJson = saKeyEnv.trim();
             if (rawJson.startsWith('"') && rawJson.endsWith('"')) rawJson = rawJson.substring(1, rawJson.length - 1);
-            if (rawJson.includes('\\n') && !rawJson.includes('\n')) rawJson = rawJson.replace(/\\n/g, '\n');
             const config = JSON.parse(rawJson);
             firebaseApp = admin.initializeApp({ credential: admin.credential.cert(config) }, 'govind-prod');
         } else {
             firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-prod');
         }
         return firebaseApp;
-    } catch {
+    } catch (e: any) {
+        console.error("🛑 [HEALTH FB ADMIN] Init Failure:", e.message);
         if (admin.apps.length > 0) return admin.apps[0];
         throw new Error("FB_INIT_FAILED");
     }

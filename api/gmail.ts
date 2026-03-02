@@ -17,14 +17,24 @@ async function getFirebaseAdmin() {
     try {
         if (saKeyEnv) {
             let rawJson = saKeyEnv.trim();
-            if (rawJson.startsWith('"') && rawJson.endsWith('"')) rawJson = rawJson.substring(1, rawJson.length - 1);
-            rawJson = rawJson.replace(/\\n/g, '\n');
-            firebaseApp = admin.initializeApp({ credential: admin.credential.cert(JSON.parse(rawJson)) }, 'govind-prod');
+            // 1. Unwrap Vercel quotes if present
+            if (rawJson.startsWith('"') && rawJson.endsWith('"')) {
+                rawJson = rawJson.substring(1, rawJson.length - 1);
+            }
+
+            // 2. Parse the JSON. 
+            // Note: If the string has escaped characters like \n, JSON.parse will handle them.
+            // DO NOT manually replace \n with literal newlines before parsing.
+            // Critical fix: JSON.parse expects \n to be escaped as \\n in the source string.
+            // If the env var value is already a JSON string with \\n, parsing will work.
+            const config = JSON.parse(rawJson);
+            firebaseApp = admin.initializeApp({ credential: admin.credential.cert(config) }, 'govind-prod');
         } else {
             firebaseApp = admin.initializeApp({ projectId: pId }, 'govind-prod');
         }
         return firebaseApp;
     } catch (err: any) {
+        console.error("🛑 [FB ADMIN] Init Failure:", err.message);
         if (err.code === 'app/duplicate-app' || err.message?.includes('already exists')) {
             return admin.app('govind-prod');
         }

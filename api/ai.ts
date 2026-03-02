@@ -10,10 +10,12 @@ if (!admin.apps.length) {
         try {
             let cred = saKey.trim();
             if (cred.startsWith('"') && cred.endsWith('"')) cred = cred.slice(1, -1);
-            cred = cred.replace(/\\n/g, '\n');
-            admin.initializeApp({ credential: admin.credential.cert(JSON.parse(cred)) });
-        } catch (e) {
-            console.error("FB Admin Init Error:", e);
+
+            // JSON.parse handles \n in private keys correctly if they are escaped as \\n in the raw string.
+            const config = JSON.parse(cred);
+            admin.initializeApp({ credential: admin.credential.cert(config) });
+        } catch (e: any) {
+            console.error("🛑 [AI FB ADMIN] Init Error:", e.message);
             admin.initializeApp({ projectId: pId });
         }
     } else {

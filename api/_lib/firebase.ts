@@ -30,10 +30,6 @@ export async function getFirebaseAdmin() {
             if (rawJson.startsWith('"') && rawJson.endsWith('"')) {
                 rawJson = rawJson.substring(1, rawJson.length - 1);
             }
-            // Handle escaped newlines from dashboard
-            if (rawJson.includes('\\n') && !rawJson.includes('\n')) {
-                rawJson = rawJson.replace(/\\n/g, '\n');
-            }
 
             const config = JSON.parse(rawJson);
             firebaseApp = admin.initializeApp({
@@ -48,6 +44,7 @@ export async function getFirebaseAdmin() {
 
         return firebaseApp;
     } catch (fatal: any) {
+        console.error("🛑 [LIB FB ADMIN] Init Failure:", fatal.message);
         if (fatal.code === 'app/duplicate-app') return admin.app('govind-prod');
         // Final fallback to default app if available
         if (admin.apps.length > 0) return admin.apps[0];
