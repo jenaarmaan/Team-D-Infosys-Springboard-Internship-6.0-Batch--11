@@ -239,11 +239,20 @@ const gmailService = {
         return { success: true };
     },
 
-    async sendEmail(uid: string, token: string, { to, subject, body }: any) {
+    async sendEmail(uid: string, token: string, { to, subject, body, threadId }: any) {
         if (!token) throw new Error('TOKEN_REQUIRED_FOR_SEND');
-        const raw = Buffer.from(`To: ${to}\r\nSubject: ${subject}\r\n\r\n${body}`).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const messageParts = [
+            `To: ${to}`,
+            `Subject: ${subject}`,
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=utf-8',
+            'Content-Transfer-Encoding: 7bit',
+            '',
+            body
+        ];
+        const raw = Buffer.from(messageParts.join('\r\n')).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/send`, {
-            method: 'POST', headers: this.getHeaders(token), body: JSON.stringify({ raw })
+            method: 'POST', headers: this.getHeaders(token), body: JSON.stringify({ raw, threadId })
         });
         if (!res.ok) throw new Error(`SEND_FAILED_${res.status}`);
         return await res.json();
@@ -256,7 +265,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let requestId = "anonymous";
     try { requestId = crypto.randomUUID(); } catch { requestId = Math.random().toString(36).substring(7); }
 
-    const { action } = req.query;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const action = (req.query.action as string) || (body?.action as string);
     const clientToken = req.headers['google-token'] || req.headers['googletoken'];
 
     console.log(`📨 [GMAIL API][${requestId}] Action: ${action} | Client Token: ${!!clientToken}`);
@@ -290,12 +300,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const email = await gmailService.getEmail(uid, token, req.query.id as string);
                 return res.status(200).json({ success: true, data: { messages: [email] } });
             case 'mark-read':
-                const bodyRead = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-                await gmailService.markAsRead(uid, token, bodyRead.messageId);
+                await gmailService.markAsRead(uid, token, body.messageId);
                 return res.status(200).json({ success: true });
             case 'send':
-                const bodySend = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-                const s = await gmailService.sendEmail(uid, token, bodySend);
+                const s = await gmailService.sendEmail(uid, token, body);
                 return res.status(200).json({ success: true, data: s });
             case 'status':
                 if (token) {
