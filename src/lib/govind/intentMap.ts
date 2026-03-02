@@ -43,6 +43,7 @@ const intentPatterns: { action: IntentAction; platform: TargetPlatform; keywords
   { action: "VIEW_FOLDER", platform: "gmail", keywords: ["open drafts", "show drafts", "drafts"] },
   { action: "VIEW_FOLDER", platform: "gmail", keywords: ["open trash", "show trash", "trash", "deleted"] },
   { action: "VIEW_FOLDER", platform: "gmail", keywords: ["open spam", "show spam", "spam"] },
+  { action: "CLOSE_CHAT", platform: "gmail", keywords: ["close this email", "close email", "close this mail", "close mail", "back to inbox", "close it", "exit email"] },
 
   // Telegram Navigation & Discovery
   { action: "OPEN_PLATFORM", platform: "telegram", keywords: ["open telegram", "go to telegram", "launch telegram", "open tg", "switch to telegram", "telegram"] },

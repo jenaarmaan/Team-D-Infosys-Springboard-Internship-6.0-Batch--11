@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useGovind } from '@/contexts/GovindContext';
+import { useGmail } from '@/contexts/GmailContext';
+import { useTelegram } from '@/contexts/TelegramContext';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,30 +18,47 @@ import {
   Send as SendIcon
 } from 'lucide-react';
 import { warmUpTTS } from '@/services/ttsService';
+import { formatDistanceToNow } from 'date-fns';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { userName, speak, addMessage } = useGovind();
+  const { userName, speak, addMessage, commandCount } = useGovind();
+  const { unreadCount, inboxEmails } = useGmail();
+  const { unreadChats, history } = useTelegram();
+
+  const totalUnreadMessages = unreadChats.reduce((acc, chat) => acc + (chat.unreadCount || 0), 0);
 
   const stats = [
-    { label: 'Unread Emails', value: '12', icon: Mail, color: 'text-red-400' },
-    { label: 'Messages', value: '8', icon: MessageSquare, color: 'text-blue-400' },
-    { label: 'Voice Commands', value: '47', icon: Mic, color: 'text-primary' },
-    { label: 'Tasks Complete', value: '15', icon: CheckCircle2, color: 'text-green-400' },
+    { label: 'Unread Emails', value: unreadCount.toString(), icon: Mail, color: 'text-red-400' },
+    { label: 'Messages', value: totalUnreadMessages.toString(), icon: MessageSquare, color: 'text-blue-400' },
+    { label: 'Voice Commands', value: commandCount.toString(), icon: Mic, color: 'text-primary' },
+    { label: 'Tasks Complete', value: '0', icon: CheckCircle2, color: 'text-green-400' },
   ];
 
-  const recentActivity = [
-    { action: 'Email from John Smith', time: '5 min ago', type: 'email' },
-    { action: 'Telegram message from Team', time: '15 min ago', type: 'message' },
-    { action: 'Voice command: Check weather', time: '1 hour ago', type: 'voice' },
-    { action: 'Email sent to client', time: '2 hours ago', type: 'sent' },
-  ];
+  // Derived Recent Activity
+  const emailActivity = inboxEmails.slice(0, 2).map(email => ({
+    action: `Email from ${email.from.split('<')[0].trim()}`,
+    time: formatDistanceToNow(new Date(email.date), { addSuffix: true }),
+    type: 'email',
+    rawDate: new Date(email.date)
+  }));
+
+  const telegramActivity = unreadChats.slice(0, 2).map(chat => ({
+    action: `Message from ${chat.title}`,
+    time: chat.lastMessage?.date ? formatDistanceToNow(new Date(chat.lastMessage.date), { addSuffix: true }) : 'Recently',
+    type: 'message',
+    rawDate: chat.lastMessage?.date ? new Date(chat.lastMessage.date) : new Date()
+  }));
+
+  const recentActivity = [...emailActivity, ...telegramActivity]
+    .sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime())
+    .slice(0, 4);
 
   const quickActions = [
     {
       label: 'Check Gmail', icon: Inbox, action: () => {
         addMessage('user', 'Check my Gmail');
-        speak("Opening Gmail. You have 12 unread emails. Would you like me to read the most important ones?");
+        speak(`Opening Gmail. You have ${unreadCount} unread emails. Would you like me to read the most important ones?`);
         navigate('/gmail');
       }
     },

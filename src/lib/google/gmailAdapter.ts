@@ -223,6 +223,10 @@ export const GmailAdapter: PlatformAdapter = {
                     };
                 }
 
+                case "CLOSE_CHAT": {
+                    return { success: true, message: "Closing email.", data: { type: "CLOSE_EMAIL" } };
+                }
+
                 case "OPEN_PLATFORM": {
                     return { success: true, message: "Opening Gmail interface.", data: { path: "/gmail" } };
                 }

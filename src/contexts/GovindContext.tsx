@@ -117,6 +117,7 @@ interface GovindContextType {
   sleep: () => void;
   clearMessages: () => void;
   performLogout: () => Promise<void>;
+  commandCount: number;
 }
 
 
@@ -147,6 +148,17 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
   const [assistantEnabled, setAssistantEnabled] = useState(false);
   // 🔹 Voice routing mode (GLOBAL = default, GMAIL = Gmail commands)
   const [voiceMode, setVoiceMode] = useState<"GLOBAL" | "GMAIL" | "COMPOSE_FLOW">("GLOBAL");
+  const [commandCount, setCommandCount] = useState(0);
+
+  // Initialize command count from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("govind_command_count");
+    if (saved) setCommandCount(parseInt(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("govind_command_count", commandCount.toString());
+  }, [commandCount]);
 
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [authStep, setAuthStep] = useState<AuthStep>("IDLE");
@@ -1078,6 +1090,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
     // 🧠 3. INTENT DETECTION (SP3)
     // 🔍 4. Intent Detection
     const intent = detectIntent(text);
+    setCommandCount(prev => prev + 1);
     console.log("[INTENT] Resolved:", intent.action, "@", intent.platform, intent.entities);
 
     // 🔐 4. Auth & System Intents
@@ -1243,6 +1256,10 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
           telegram.closeChat();
         }
 
+        if (result.data?.type === "CLOSE_EMAIL" && intent.platform === "gmail") {
+          gmail.closeEmail();
+        }
+
         // 🟢 SYNC READ EMAIL TO UI
         if (result.success && intent.action === "READ") {
           if (intent.platform === "gmail" && result.data?.id) {
@@ -1356,6 +1373,7 @@ export const GovindProvider = ({ children }: { children: ReactNode }) => {
         sleep,
         clearMessages,
         performLogout,
+        commandCount
       }}
     >
 
