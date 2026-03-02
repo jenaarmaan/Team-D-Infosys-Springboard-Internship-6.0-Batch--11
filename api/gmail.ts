@@ -96,9 +96,9 @@ const gmailService = {
     async listEmails(uid: string, token: string, options: any) {
         // 1. If token is provided, we MUST use it (No fallback here, let frontend retry)
         if (token) {
-            const { limit = 20, unread = false, q } = options || {};
+            const { limit = 20, unread = false, q, query: rawQuery } = options || {};
             let query = unread ? 'is:unread ' : '';
-            if (q) query += q;
+            if (q || rawQuery) query += (q || rawQuery);
             const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}${query ? `&q=${encodeURIComponent(query)}` : '&labelIds=INBOX'}`;
 
             const res = await fetch(url, { headers: this.getHeaders(token) });
@@ -151,6 +151,7 @@ const gmailService = {
         if (query.includes("in:sent")) path = "[Gmail]/Sent Mail";
         if (query.includes("in:draft")) path = "[Gmail]/Drafts";
         if (query.includes("in:trash")) path = "[Gmail]/Trash";
+        if (query.includes("-in:trash -in:spam")) path = "[Gmail]/All Mail";
 
         await client.connect();
         const mailbox = await client.mailboxOpen(path);

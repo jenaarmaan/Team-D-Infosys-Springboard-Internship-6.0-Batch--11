@@ -199,7 +199,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
         starred: "is:starred",
         sent: "in:sent",
         drafts: "in:draft",
-        trash: "in:trash"
+        trash: "in:trash",
+        all: "-in:trash -in:spam"
       };
       const query = queryMap[currentSection] || "in:inbox";
       const result = await apiClient.get<any>(`/api/v1/gmail?action=list&limit=30&query=${encodeURIComponent(query)}`, { googleToken: token });
@@ -239,7 +240,8 @@ export const GmailProvider = ({ children }: { children: ReactNode }) => {
           starred: "is:starred",
           sent: "in:sent",
           drafts: "in:draft",
-          trash: "in:trash"
+          trash: "in:trash",
+          all: "-in:trash -in:spam"
         };
         const query = queryMap[currentSection] || "in:inbox";
         const fallbackResult = await apiClient.get<any>(`/api/v1/gmail?action=list&limit=30&query=${encodeURIComponent(query)}`);

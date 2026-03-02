@@ -131,6 +131,7 @@ const Gmail = () => {
     { id: 'sent', icon: Send, label: 'Sent', count: 0 },
     { id: 'drafts', icon: File, label: 'Drafts', count: 0 },
     { id: 'trash', icon: Trash2, label: 'Trash', count: 0 },
+    { id: 'all', icon: Archive, label: 'All Mail', count: 0 },
   ];
 
   return (
