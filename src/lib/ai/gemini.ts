@@ -61,6 +61,9 @@ export async function callGemini(prompt: string, images?: string[]): Promise<str
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const modelMatrix = [
+        { id: "gemini-2.5-flash", version: "v1beta" },
+        { id: "gemini-2.5-pro", version: "v1beta" },
+        { id: "gemini-2.0-flash", version: "v1beta" },
         { id: "gemini-1.5-flash", version: "v1" },
         { id: "gemini-1.5-flash", version: "v1beta" },
         { id: "gemini-1.5-flash-latest", version: "v1beta" },

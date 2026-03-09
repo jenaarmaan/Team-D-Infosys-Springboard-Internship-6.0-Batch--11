@@ -132,8 +132,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const availableNames = modelJson.models.map((m: any) => m.name.replace("models/", ""));
                 console.log(`[AI] Discovered ${availableNames.length} models: ${availableNames.slice(0, 5).join(", ")}...`);
 
-                // Prioritize finding a "flash" or "pro" model that actually exists
-                const bestModel = availableNames.find((n: string) => n.includes("gemini-1.5-flash")) ||
+                // Prioritize finding a "flash" or "pro" model that actually exists (favoring newer 2.x versions)
+                const bestModel = availableNames.find((n: string) => n.includes("gemini-2.5-flash")) ||
+                    availableNames.find((n: string) => n.includes("gemini-2.5-pro")) ||
+                    availableNames.find((n: string) => n.includes("gemini-2.0-flash")) ||
+                    availableNames.find((n: string) => n.includes("gemini-2.0-pro")) ||
+                    availableNames.find((n: string) => n.includes("gemini-1.5-flash")) ||
                     availableNames.find((n: string) => n.includes("gemini-1.5-pro")) ||
                     availableNames.find((n: string) => n.includes("gemini"));
 
@@ -149,6 +153,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 6. Matrix Strategy: Discovered + Hardcoded
         const modelMatrix = [
             ...discoveredModels,
+            { id: "gemini-2.5-flash", version: "v1beta" },
+            { id: "gemini-2.5-pro", version: "v1beta" },
+            { id: "gemini-2.0-flash", version: "v1beta" },
+            { id: "gemini-2.0-flash-lite-preview-01-21", version: "v1beta" },
+            { id: "gemini-2.0-pro-exp-02-05", version: "v1beta" },
             { id: "gemini-1.5-flash", version: "v1beta" },
             { id: "gemini-1.5-flash", version: "v1" },
             { id: "gemini-1.5-flash-latest", version: "v1beta" },

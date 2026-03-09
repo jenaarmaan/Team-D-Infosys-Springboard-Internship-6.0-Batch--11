@@ -21,7 +21,7 @@ export async function getGeminiClient() {
     return genAI;
 }
 
-export async function getGeminiModel(modelName: string = 'gemini-1.5-flash') {
+export async function getGeminiModel(modelName: string = 'gemini-2.0-flash') {
     const client = await getGeminiClient();
     return client.getGenerativeModel({
         model: modelName,
